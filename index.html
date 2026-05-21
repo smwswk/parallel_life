@@ -1,0 +1,4824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平行人生</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #0e0e0b;
+      --bg-card: #17160f;
+      --border: #2d2a20;
+      --text: #d8d2c3;
+      --text-dim: #8d8574;
+      --accent: #d7b46a;
+      --accent-glow: rgba(215, 180, 106, 0.14);
+      --route-a: #6FA66A;
+      --route-b: #E74C3C;
+      --route-c: #2ECC71;
+      --route-d: #9B59B6;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      height: 100dvh;
+      width: 100vw;
+    }
+
+    /* ===== Canvas背景 ===== */
+    #bg-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ===== 场景 ===== */
+    .scene {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      min-height: 100dvh;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+      padding: 20px;
+    }
+    .scene.active {
+      opacity: 1;
+      pointer-events: none;
+    }
+    .scene.active .dialogue-box,
+    .scene.active #intro-btn-wrap,
+    .scene.active .card,
+    .scene.active .select-container,
+    .scene.active .game-shell {
+      pointer-events: auto;
+    }
+
+    /* ===== 打字机 ===== */
+    .dialogue-box {
+      background: rgba(17, 24, 32, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 36px;
+      max-width: 520px;
+      width: 90%;
+      position: relative;
+      z-index: 4;
+      margin-top: 20px;
+    }
+    .dialogue-box p {
+      font-size: 1.05rem;
+      line-height: 1.9;
+      min-height: 2em;
+      color: var(--text);
+    }
+    .cursor {
+      display: inline-block;
+      width: 2px; height: 1.1em;
+      background: var(--accent);
+      margin-left: 3px;
+      animation: blink-cursor 1s step-end infinite;
+      vertical-align: text-bottom;
+    }
+    @keyframes blink-cursor {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* ===== 按钮 ===== */
+    .btn {
+      padding: 14px 36px;
+      border-radius: 10px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s;
+      border: none;
+      font-family: inherit;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 500;
+    }
+    .btn-primary:hover {
+      background: #e0c37e;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px var(--accent-glow);
+    }
+    .btn-glow {
+      background: transparent;
+      color: var(--accent);
+      border: 1.5px solid var(--accent);
+    }
+    .btn-glow::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(215,180,106,0.12), transparent);
+      transition: left 0.6s;
+      pointer-events: none;
+    }
+    .btn-glow:hover::before {
+      left: 100%;
+    }
+    .btn-glow:hover {
+      border-color: #e0c37e;
+      color: #e0c37e;
+    }
+    .btn-choice {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 18px 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .btn-choice:hover {
+      border-color: var(--accent);
+      transform: translateX(4px);
+      background: rgba(215, 180, 106, 0.05);
+    }
+    .choice-icon {
+      font-size: 1.6rem;
+      flex-shrink: 0;
+    }
+    .choice-text {
+      line-height: 1.4;
+    }
+    .choice-desc {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* ===== 试玩关卡 ===== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      max-width: 520px;
+      width: 90%;
+      position: relative;
+      z-index: 2;
+    }
+    .scene-visual {
+      height: 100px;
+      background: linear-gradient(180deg, #15130d 0%, #0e0e0b 100%);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .scene-visual .window-glow {
+      position: absolute;
+      width: 60px; height: 80px;
+      background: rgba(215, 180, 106, 0.1);
+      border-radius: 4px;
+      top: 10px; right: 20px;
+      border: 1px solid rgba(215, 180, 106, 0.2);
+      pointer-events: none;
+    }
+    .scene-visual .desk-line {
+      position: absolute;
+      bottom: 20px; left: 10%; right: 10%;
+      height: 2px;
+      background: var(--border);
+    }
+    .scene-visual .laptop {
+      position: absolute;
+      bottom: 22px; left: 50%;
+      transform: translateX(-50%);
+      width: 40px; height: 28px;
+      background: var(--border);
+      border-radius: 2px 2px 0 0;
+    }
+    .scene-visual .laptop::after {
+      content: '';
+      position: absolute;
+      bottom: -4px; left: -5px;
+      width: 50px; height: 4px;
+      background: var(--border);
+      border-radius: 0 0 2px 2px;
+    }
+    .time-tag {
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+    .card h2 {
+      font-size: 1.3rem;
+      font-weight: 400;
+      color: #e0ecff;
+      margin-bottom: 12px;
+    }
+    .card-desc {
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+    .choices-box {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* 时间线 */
+    .timeline {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .timeline-node {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .timeline-node::before {
+      content: '';
+      position: absolute;
+      left: 11px;
+      top: 28px;
+      width: 1.5px;
+      height: calc(100% + 4px);
+      background: var(--border);
+    }
+    .timeline-node:last-child::before {
+      display: none;
+    }
+    .timeline-dot {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: var(--accent);
+      flex-shrink: 0;
+      z-index: 1;
+      font-weight: 600;
+    }
+    .timeline-body h4 {
+      font-size: 0.85rem;
+      color: #e0ecff;
+      margin-bottom: 3px;
+      font-weight: 500;
+    }
+    .timeline-body p {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .hint-box {
+      background: rgba(215, 180, 106, 0.06);
+      border: 1px solid rgba(215, 180, 106, 0.15);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .hint-box p {
+      font-size: 0.85rem;
+      color: var(--accent);
+      line-height: 1.6;
+    }
+
+    /* ===== 职业选择 ===== */
+    .select-container {
+      max-width: 520px;
+      width: 90%;
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+    .select-container h2 {
+      font-size: 1.8rem;
+      font-weight: 300;
+      color: #e0ecff;
+      margin-bottom: 6px;
+    }
+    .select-container .sub {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      margin-bottom: 28px;
+    }
+    .career-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .career-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .career-card:hover {
+      border-color: var(--text-dim);
+      transform: translateY(-3px);
+    }
+    .career-card.selected {
+      border-color: var(--accent);
+      background: rgba(215, 180, 106, 0.06);
+      box-shadow: 0 0 20px rgba(215, 180, 106, 0.1);
+    }
+    .career-card .c-icon {
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+      transition: transform 0.3s;
+    }
+    .career-card:hover .c-icon {
+      transform: scale(1.1);
+    }
+    .career-card .c-name {
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+    /* ===== 主可视化 ===== */
+    #scene-main {
+      overflow: hidden;
+      justify-content: flex-start;
+      padding: 8px 10px;
+    }
+    .game-shell {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      z-index: 2;
+      padding: 4px 0 8px;
+      max-height: calc(100dvh - 16px);
+    }
+    .game-shell.impact-burst {
+      animation: screen-impact 0.5s cubic-bezier(.16, .84, .28, 1) both;
+    }
+    .impact-flash {
+      display: none;
+    }
+    .game-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 0;
+      flex-shrink: 0;
+    }
+    .topbar-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(17, 24, 32, 0.86);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .sound-toggle.active {
+      color: #0e0e0b;
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 18px rgba(215, 180, 106, 0.18);
+    }
+    .game-title {
+      min-width: 0;
+      text-align: center;
+    }
+    .game-title { display: none; }
+    .stat-grid {
+      display: none;
+    }
+    .stat-card {
+      flex: 1;
+      min-width: 0;
+      background: rgba(17, 24, 32, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 2px;
+      text-align: center;
+      transition: border-color 0.25s ease;
+    }
+    .stat-card:hover { border-color: var(--text-dim); }
+    .stat-icon {
+      font-size: 0.9rem;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+    .stat-value-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 2px;
+      margin-bottom: 3px;
+    }
+    .stat-value {
+      color: #e0ecff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-label {
+      color: var(--text-dim);
+      font-size: 0.55rem;
+      line-height: 1;
+    }
+    .stat-track {
+      height: 2px;
+      border-radius: 999px;
+      background: #192331;
+      overflow: hidden;
+      margin: 0 auto;
+      max-width: 36px;
+    }
+    .stat-fill {
+      height: 100%;
+      border-radius: inherit;
+      transition: width 0.35s ease;
+    }
+    .game-stage {
+      background: rgba(17, 24, 32, 0.94);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .battle-panel {
+      position: relative;
+      margin-top: 4px;
+      padding: 4px 0;
+    }
+    .battle-panel.clash {
+      animation: clash-shake 0.58s cubic-bezier(.2, .9, .16, 1) both;
+    }
+    .duel-board {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .duel-side {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .duel-head {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      color: var(--text-dim);
+      font-size: 0.58rem;
+      line-height: 1;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .duel-head span:last-child {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      font-size: 0.6rem;
+    }
+    .duel-meter {
+      flex: 1;
+      height: 4px;
+      border-radius: 999px;
+      background: #17160f;
+      overflow: hidden;
+      min-width: 24px;
+    }
+    .duel-fill {
+      height: 100%;
+      border-radius: inherit;
+      transition: width 0.45s cubic-bezier(.2,.9,.2,1);
+    }
+    .battle-panel.clash .duel-fill {
+      animation: bar-flash 0.58s ease both;
+    }
+    .duel-vs {
+      color: var(--text-dim);
+      font-size: 0.55rem;
+      flex-shrink: 0;
+      padding: 0 2px;
+    }
+    .duel-log {
+      display: none;
+    }
+    .battle-effects {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+    .damage-float {
+      position: absolute;
+      top: 22px;
+      right: 24px;
+      color: #ff6b6b;
+      font-size: 1.25rem;
+      font-weight: 800;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+      animation: damage-float 1.05s cubic-bezier(.2, .95, .18, 1) both;
+    }
+    .damage-float.player {
+      left: 24px;
+      right: auto;
+      color: #d7b46a;
+    }
+    .damage-float.shock {
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+      color: #ffffff;
+      font-size: 1.05rem;
+      letter-spacing: 0.12em;
+      animation-name: shock-float;
+    }
+    .game-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--accent);
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .progress-dots {
+      display: flex;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+    .progress-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: #263548;
+    }
+    .progress-dot.done { background: #44d07b; }
+    .progress-dot.current { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+    .game-stage h2 {
+      font-size: 1rem;
+      line-height: 1.2;
+      color: #e0ecff;
+      font-weight: 400;
+      margin-bottom: 4px;
+    }
+    .game-stage p {
+      display: none;
+    }
+    .route-context {
+      display: none;
+    }
+    .random-event-card {
+      margin-top: 4px;
+      border: 1px solid rgba(227, 179, 65, 0.1);
+      background: rgba(227, 179, 65, 0.03);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .random-event-card:hover,
+    .random-event-card:focus-visible {
+      border-color: rgba(227, 179, 65, 0.35);
+      background: rgba(227, 179, 65, 0.06);
+      outline: none;
+    }
+    .random-event-card.expanded {
+      background: rgba(227, 179, 65, 0.05);
+      border-color: rgba(227, 179, 65, 0.2);
+    }
+    .event-kicker-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .event-kicker {
+      color: #e3b341;
+      font-size: 0.58rem;
+      letter-spacing: 0.04em;
+    }
+    .event-toggle {
+      color: #e3b341;
+      font-size: 0.65rem;
+      line-height: 1;
+      transition: transform 0.2s ease;
+    }
+    .random-event-card.expanded .event-toggle {
+      transform: rotate(180deg);
+    }
+    .event-body {
+      display: none;
+      color: var(--text);
+      font-size: 0.7rem;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+    .event-response-row {
+      display: none;
+      gap: 3px;
+      margin-top: 4px;
+    }
+    .event-response-btn {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid rgba(227, 179, 65, 0.15);
+      background: rgba(14, 14, 11, 0.4);
+      color: var(--text-dim);
+      border-radius: 999px;
+      padding: 3px 4px;
+      font: inherit;
+      font-size: 0.55rem;
+      line-height: 1.1;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .event-response-btn:hover,
+    .event-response-btn:focus-visible {
+      color: #f0d78a;
+      border-color: rgba(227, 179, 65, 0.4);
+      outline: none;
+    }
+    .event-response-btn.active {
+      color: #0e0e0b;
+      background: #d7b46a;
+      border-color: #d7b46a;
+      font-weight: 700;
+    }
+    .event-detail-row {
+      display: none;
+      align-items: flex-start;
+      gap: 5px;
+      margin-top: 3px;
+    }
+    .event-detail-label {
+      flex: 0 0 auto;
+      color: #e3b341;
+      font-size: 0.55rem;
+      line-height: 1.5;
+    }
+    .random-event-card.expanded .event-body,
+    .random-event-card.expanded .event-response-row,
+    .random-event-card.expanded .event-detail-row {
+      display: flex;
+    }
+    .random-event-card.expanded .event-body {
+      display: block;
+    }
+    .game-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .game-choice {
+      width: 100%;
+      background: rgba(10, 14, 20, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      transition: all 0.2s ease;
+    }
+    .game-choice.playable-card {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+      animation: card-rise 0.25s ease both;
+    }
+    .game-choice:hover {
+      border-color: var(--accent);
+      background: rgba(215, 180, 106, 0.05);
+      transform: translateY(-1px);
+    }
+    .choice-head {
+      display: none;
+    }
+    .choice-title {
+      color: #f1e5c7;
+      font-size: 0.88rem;
+      font-weight: 400;
+      line-height: 1.25;
+    }
+    .choice-combat-row {
+      display: none;
+    }
+    .impact-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 6px;
+    }
+    .choice-combat-row {
+      display: flex;
+      gap: 5px;
+      margin-top: 6px;
+    }
+    .combat-chip {
+      flex: 1;
+      min-width: 0;
+      border-radius: 6px;
+      padding: 4px 5px;
+      font-size: 0.64rem;
+      line-height: 1.1;
+      font-weight: 650;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .card-attack { color: #ffd27a; background: rgba(227, 179, 65, 0.13); }
+    .card-guard { color: #d7b46a; background: rgba(215, 180, 106, 0.12); }
+    .card-recoil { color: #ff8c8c; background: rgba(255, 107, 107, 0.11); }
+    .impact-pill {
+      border-radius: 999px;
+      background: #182230;
+      color: var(--text-dim);
+      padding: 3px 7px;
+      font-size: 0.66rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .pressure-pill {
+      border-radius: 999px;
+      background: rgba(215, 180, 106, 0.1);
+      color: #d7b46a;
+      padding: 3px 7px;
+      font-size: 0.66rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .impact-pill.up { color: #44d07b; background: rgba(68, 208, 123, 0.12); }
+    .impact-pill.down { color: #ff6b6b; background: rgba(255, 107, 107, 0.12); }
+    @keyframes clash-shake {
+      0% { transform: translateX(0); }
+      12% { transform: translateX(-8px) rotate(-0.4deg); }
+      28% { transform: translateX(7px) rotate(0.35deg); }
+      45% { transform: translateX(-4px) rotate(-0.2deg); }
+      68% { transform: translateX(2px); }
+      100% { transform: translateX(0); }
+    }
+    @keyframes bar-flash {
+      0%, 100% { filter: brightness(1); }
+      20% { filter: brightness(2.2) saturate(1.45); }
+      55% { filter: brightness(1.65); }
+    }
+    @keyframes damage-float {
+      0% { opacity: 0; transform: translateY(8px) scale(0.85); }
+      16% { opacity: 1; transform: translateY(-4px) scale(1.22); }
+      100% { opacity: 0; transform: translateY(-42px) scale(0.96); }
+    }
+    @keyframes shock-float {
+      0% { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.86); }
+      18% { opacity: 1; transform: translateX(-50%) translateY(-2px) scale(1.12); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-34px) scale(0.98); }
+    }
+    @keyframes screen-impact {
+      0% { transform: translate3d(0,0,0); filter: brightness(1); }
+      16% { transform: translate3d(-3px, 2px, 0) scale(1.006); filter: brightness(1.12); }
+      32% { transform: translate3d(3px, -2px, 0) scale(1.002); }
+      58% { transform: translate3d(-1px, 1px, 0); }
+      100% { transform: translate3d(0,0,0); filter: brightness(1); }
+    }
+    @keyframes impact-flash {
+      0% { opacity: 0; transform: scale(0.98); }
+      20% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.04); }
+    }
+    @keyframes card-rise {
+      0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .game-history {
+      display: none;
+    }
+    .game-history.active { display: none; }
+    .history-badge {
+      display: none;
+      font-size: 0.68rem;
+      padding-top: 1px;
+    }
+    .ending-card {
+      background: rgba(17, 24, 32, 0.96);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      max-height: calc(100dvh - 60px);
+      overflow-y: auto;
+    }
+    .ending-card h2 {
+      font-size: 1.05rem;
+      color: #e0ecff;
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }
+    .ending-card p {
+      color: var(--text);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+    .ending-parallel {
+      margin-top: 10px;
+      padding: 8px 0 2px;
+      border-top: 1px solid rgba(90, 106, 122, 0.2);
+    }
+    .parallel-kicker {
+      color: #e3b341;
+      font-size: 0.6rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .parallel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .parallel-person {
+      display: block;
+      color: #eaf3ff;
+      font-size: 0.92rem;
+      line-height: 1.2;
+      font-weight: 600;
+    }
+    .parallel-role {
+      display: block;
+      color: var(--text-dim);
+      font-size: 0.62rem;
+      line-height: 1.3;
+      margin-top: 1px;
+    }
+    .parallel-match {
+      flex: 0 0 auto;
+      color: #0e0e0b;
+      background: #e3b341;
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .parallel-body {
+      color: var(--text);
+      font-size: 0.76rem;
+      line-height: 1.5;
+    }
+    .ending-encouragement {
+      color: #eaf3ff;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      margin-top: 6px;
+    }
+    .parallel-note {
+      color: var(--text-dim);
+      font-size: 0.62rem;
+      line-height: 1.4;
+      margin-top: 5px;
+    }
+    .ending-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .ending-actions .btn {
+      padding: 10px 16px;
+      font-size: 0.8rem;
+      border-radius: 8px;
+    }
+    .small-note {
+      color: var(--text-dim);
+      font-size: 0.72rem;
+      line-height: 1.45;
+      margin-top: 8px;
+      min-height: 1em;
+    }
+    .map-panel {
+      background: rgba(17, 24, 32, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .map-panel summary {
+      cursor: pointer;
+      padding: 8px 12px;
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      list-style: none;
+    }
+    .map-panel summary::-webkit-details-marker { display: none; }
+    .map-panel[open] summary {
+      border-bottom: 1px solid var(--border);
+    }
+    .main-header {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0 6px;
+      margin-bottom: 8px;
+    }
+    .main-header h1 {
+      font-size: 0.9rem;
+      font-weight: 300;
+      color: #e0ecff;
+    }
+    .main-header .legend-row {
+      display: flex;
+      gap: 10px;
+    }
+    .leg-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+    }
+    .leg-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+
+    #tree-wrap {
+      width: 100%;
+      max-width: 1000px;
+      height: 280px;
+      position: relative;
+    }
+    #tree-wrap svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .route-path {
+      fill: none;
+      stroke-width: 2;
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+    .route-path.real {
+      stroke-width: 3.5;
+      opacity: 1;
+    }
+    .route-path.dashed {
+      stroke-dasharray: 6 4;
+    }
+    .route-path:hover {
+      opacity: 1;
+    }
+
+    .node-card-group {
+      cursor: pointer;
+    }
+    .node-card-group:hover .node-rect {
+      filter: brightness(1.3);
+      stroke: var(--accent);
+    }
+    .node-card-group.chosen .node-rect {
+      stroke: #e0ecff;
+      stroke-width: 2;
+      filter: drop-shadow(0 0 8px rgba(215, 180, 106, 0.28));
+    }
+    .node-rect {
+      fill: var(--bg-card);
+      stroke: var(--border);
+      stroke-width: 1;
+      rx: 10;
+      transition: all 0.3s;
+    }
+    .node-pill {
+      rx: 4;
+    }
+    .node-pill-text {
+      font-size: 9px;
+      fill: var(--text-dim);
+      text-anchor: middle;
+    }
+    .node-icon-text {
+      font-size: 20px;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .node-title {
+      font-size: 10px;
+      fill: var(--text);
+      text-anchor: middle;
+      font-weight: 500;
+      pointer-events: none;
+    }
+    .node-time {
+      font-size: 9px;
+      fill: var(--text-dim);
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .start-group {
+      cursor: default;
+    }
+    .start-circle {
+      fill: var(--bg);
+      stroke: var(--accent);
+      stroke-width: 2.5;
+    }
+    .start-text {
+      font-size: 11px;
+      fill: var(--text);
+      text-anchor: end;
+      font-weight: 500;
+    }
+
+    .ir-marker {
+      cursor: help;
+    }
+    .ir-text {
+      font-size: 8px;
+      fill: #e3b341;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .ir-marker:hover + .ir-text,
+    .ir-text:hover {
+      opacity: 1;
+    }
+
+    /* 详情弹窗 */
+    .detail-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 100;
+    }
+    .detail-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .detail-popup {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.95);
+      width: 400px;
+      max-width: 90vw;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 101;
+    }
+    .detail-popup.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .detail-close {
+      position: absolute;
+      top: 10px; right: 14px;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 22px;
+      cursor: pointer;
+    }
+    .detail-close:hover { color: #e0ecff; }
+    .detail-tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .detail-popup h3 {
+      font-size: 1.1rem;
+      color: #e0ecff;
+      margin-bottom: 3px;
+      font-weight: 400;
+    }
+    .detail-time {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+    }
+    .detail-desc {
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+    .detail-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .metric {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 10px 6px;
+      text-align: center;
+    }
+    .metric-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+    }
+    .metric-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-bottom: 5px;
+      overflow: hidden;
+    }
+    .metric-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+    .metric-val {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #e0ecff;
+    }
+    .detail-event {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .detail-event-label {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      margin-bottom: 3px;
+    }
+    .detail-event-text {
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+    .detail-open {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.88rem;
+      padding: 16px 0;
+    }
+
+    /* 雷达图 */
+    .radar-area {
+      max-width: 420px;
+      width: 100%;
+      margin: 16px auto 40px;
+      text-align: center;
+    }
+    .radar-area h3 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+
+    /* 底部 */
+    .page-footer {
+      text-align: center;
+      padding: 6px 0;
+      font-size: 0.62rem;
+      color: #3a4a5a;
+      flex-shrink: 0;
+    }
+
+    /* 工具提示 */
+    .tip {
+      position: absolute;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 0.75rem;
+      color: var(--text);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 50;
+    }
+
+    /* 响应式 */
+    @media (max-width: 600px) {
+      .scene {
+        overflow: hidden;
+        justify-content: flex-start;
+        padding: 6px 8px;
+      }
+      #scene-intro {
+        justify-content: center;
+        padding: 12px;
+      }
+      #scene-select {
+        padding-top: 12px;
+        padding-bottom: 20px;
+      }
+      .select-container {
+        width: 100%;
+        padding: 0 4px;
+      }
+      .select-container h2 { font-size: 1.3rem; }
+      .select-container .sub { margin-bottom: 14px; font-size: 0.82rem; }
+      .career-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .career-card {
+        border-radius: 8px;
+        padding: 10px 4px;
+      }
+      .career-card .c-icon {
+        font-size: 1.5rem;
+        margin-bottom: 4px;
+      }
+      .career-card .c-name { font-size: 0.72rem; }
+      #btn-generate,
+      #btn-resume {
+        width: 100%;
+      }
+      .card { padding: 20px; }
+      .dialogue-box { padding: 16px 20px; }
+      .main-header { flex-direction: column; gap: 6px; align-items: flex-start; }
+      .main-header .legend-row { flex-wrap: wrap; }
+      #tree-wrap { height: 220px; }
+      .detail-popup { width: 92vw; padding: 16px; }
+      .game-shell { max-height: calc(100dvh - 12px); gap: 6px; }
+      .stat-grid { gap: 4px; }
+      .stat-card { padding: 5px 2px; }
+      .stat-icon { font-size: 0.85rem; }
+      .stat-value { font-size: 0.88rem; }
+      .game-stage { padding: 10px 12px; }
+      .game-stage h2 { font-size: 0.92rem; }
+      .game-choice { padding: 7px 9px; }
+      .choice-title { font-size: 0.82rem; }
+      .ending-actions { grid-template-columns: 1fr 1fr; gap: 5px; }
+      .ending-actions .btn { padding: 8px 12px; font-size: 0.75rem; }
+      .ending-card { padding: 12px; }
+      .map-panel summary { padding: 6px 10px; font-size: 0.65rem; }
+    }
+
+    /* Meta进度条 */
+    .meta-level-bar {
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: rgba(17, 24, 32, 0.5);
+      border: 1px solid rgba(45, 42, 32, 0.3);
+      border-radius: 8px;
+    }
+    .meta-level-label {
+      color: #e0ecff;
+      font-size: 0.72rem;
+      font-weight: 500;
+    }
+    .meta-xp-text {
+      color: var(--text-dim);
+      font-size: 0.6rem;
+    }
+    .meta-gained {
+      color: var(--accent);
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+    .meta-unlock {
+      color: #44d07b;
+      font-size: 0.68rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .meta-xp-track {
+      height: 3px;
+      border-radius: 999px;
+      background: #192331;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+    .meta-xp-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 0.5s ease;
+    }
+    .meta-next-reward {
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      margin-top: 3px;
+    }
+    .meta-total-stats {
+      color: var(--text-dim);
+      font-size: 0.58rem;
+      margin-top: 2px;
+    }
+
+    /* 人生名片弹窗 */
+    .card-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.88);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .card-overlay.active {
+      display: flex;
+    }
+    .card-container {
+      position: relative;
+      max-width: 420px;
+      width: 100%;
+    }
+    .card-container img {
+      width: 100%;
+      border-radius: 16px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(215,180,106,0.08);
+    }
+    .card-close {
+      position: absolute;
+      top: -14px;
+      right: -14px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .card-close:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* 职业选择页Meta面板 */
+    .meta-panel {
+      max-width: 520px;
+      width: 90%;
+      margin: 18px auto 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- ===== Scene 0: 开场叙事 ===== -->
+  <section id="scene-intro" class="scene active">
+    <div class="dialogue-box">
+      <p id="typewriter"></p><span class="cursor" id="cursor">|</span>
+    </div>
+    <div style="margin-top: 28px; opacity: 0; transition: opacity 1s;" id="intro-btn-wrap">
+      <button class="btn btn-glow" id="btn-enter" onclick="showScene(1)">进入平行人生</button>
+    </div>
+  </section>
+
+  <!-- ===== Scene 1: 试玩关卡 ===== -->
+  <section id="scene-tutorial" class="scene">
+    <div class="card" id="tut-card">
+      <div class="scene-visual">
+        <div class="window-glow"></div>
+        <div class="desk-line"></div>
+        <div class="laptop"></div>
+      </div>
+      <div class="time-tag">周五 · 晚上8点</div>
+      <h2 id="tut-title">一个普通的周末前夜</h2>
+      <p class="card-desc" id="tut-desc">刚结束一周工作。桌上摊着没做完的方案，手机里有朋友发来的聚会邀请。</p>
+      <div class="choices-box" id="tut-choices">
+        <button class="btn-choice" onclick="tutorialChoice('work')">
+          <span class="choice-icon">💻</span>
+          <div class="choice-text">
+            <div>留下来，把方案做完</div>
+            <div class="choice-desc">短期收益，但可能错过些什么</div>
+          </div>
+        </button>
+        <button class="btn-choice" onclick="tutorialChoice('party')">
+          <span class="choice-icon">🎉</span>
+          <div class="choice-text">
+            <div>关掉电脑，去参加聚会</div>
+            <div class="choice-desc">放松一下，看看会发生什么</div>
+          </div>
+        </button>
+      </div>
+      <div class="timeline" id="tut-result" style="display:none;"></div>
+    </div>
+  </section>
+
+  <!-- ===== Scene 2: 职业选择 ===== -->
+  <section id="scene-select" class="scene">
+    <div class="select-container">
+      <h2>你是谁？</h2>
+      <p class="sub">选择你的起点，生成专属平行人生</p>
+      <div class="career-grid" id="career-grid"></div>
+      <button class="btn btn-primary" id="btn-generate" onclick="generateLife()" style="opacity: 0.4; pointer-events: none;">
+        开始这局人生
+      </button>
+      <button class="btn btn-glow" id="btn-resume" onclick="restoreGameFromSave()" style="display:none; margin-top: 10px; width: 100%;">
+        继续上次人生
+      </button>
+    </div>
+    <div class="meta-panel" id="meta-panel"></div>
+  </section>
+
+  <!-- ===== Scene 3: 游戏主循环 ===== -->
+  <section id="scene-main" class="scene">
+    <div class="game-shell">
+      <div class="game-topbar">
+        <button class="icon-btn" onclick="backToSelect()" aria-label="返回职业选择">‹</button>
+        <div class="game-title">
+          <h1>平行人生</h1>
+          <p id="game-step-label">选择会改变下一段人生</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-btn sound-toggle active" id="sound-toggle" onclick="toggleAudio()" aria-label="切换声音">♪</button>
+          <button class="icon-btn" data-action="restart" onclick="restartGame()" aria-label="重开">↻</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" id="stat-grid"></div>
+
+      <div class="game-stage" id="game-stage">
+        <div class="game-step">
+          <span id="game-phase-label">第 1 站</span>
+          <div class="progress-dots" id="progress-dots"></div>
+        </div>
+        <h2 id="game-event-title">选择你的方向</h2>
+        <p id="game-event-desc">每一次选择都会改变钱、健康、关系、意义和自由。</p>
+        <div class="route-context" id="game-route-context"></div>
+        <div class="battle-panel" id="battle-panel"></div>
+        <div class="game-choices" id="game-choices"></div>
+      </div>
+
+      <div class="ending-card" id="ending-card" style="display:none;"></div>
+
+      <div class="game-history" id="game-history"></div>
+
+      <details class="map-panel" id="map-panel">
+        <summary>查看人生地图和资产负债表</summary>
+        <div class="main-header">
+          <h1>路线地图</h1>
+          <div class="legend-row" id="main-legend"></div>
+        </div>
+        <div id="tree-wrap"></div>
+        <div class="radar-area">
+          <h3>路线基准对比</h3>
+          <div id="radar-chart"></div>
+        </div>
+      </details>
+
+      <div class="page-footer">
+        <button class="btn-glow" data-action="share" style="padding: 8px 16px; font-size: 0.78rem; background: transparent;" onclick="shareGame()">分享本局</button>
+        <div class="small-note" id="share-feedback"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 弹窗 ===== -->
+  <div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>
+  <div class="detail-popup" id="detail-popup">
+    <button class="detail-close" onclick="closeDetail()">&times;</button>
+    <div id="detail-body"></div>
+  </div>
+
+  <div class="tip" id="tip"></div>
+
+  <script>
+    // ============================================================
+    // 配置
+    // ============================================================
+    const CAREERS = [
+      { id: 'architecture', icon: '🏗️', name: '建筑/设计', color: '#6FA66A' },
+      { id: 'tech', icon: '💻', name: '互联网/技术', color: '#E74C3C' },
+      { id: 'finance', icon: '💰', name: '金融/商务', color: '#2ECC71' },
+      { id: 'education', icon: '📚', name: '教育/学术', color: '#9B59B6' },
+      { id: 'gov', icon: '🏛️', name: '体制内', color: '#F39C12' },
+      { id: 'freelance', icon: '🎨', name: '自由职业', color: '#1ABC9C' }
+    ];
+
+    const ICON_MAP = {
+      '加班': '💻', '工作': '💻', '方案': '💻', '项目': '🚀', '产品': '🚀',
+      '焦虑': '😰', '压力': '😰', '断档': '😰',
+      '晋升': '📈', '升职': '📈', '成功': '📈', '合伙人': '📈',
+      '聚会': '🎉', '社交': '🎉', '朋友': '👥', '婚礼': '💒',
+      '学习': '📖', '备考': '📖', '考试': '📖', '刷题': '📖',
+      '出国': '✈️', '留学': '✈️', '雅思': '✈️', '北欧': '✈️',
+      '创意': '🎨', '内容': '🎨', '播客': '🎙️', '摄影': '📷',
+      '健康': '🏥', '生病': '🏥', '医院': '🏥', '身体': '🏥',
+      '收入': '💰', '钱': '💰', '存款': '💰', '薪资': '💰',
+      '关系': '👥', '家庭': '👥', '婚姻': '💒', '孩子': '👶',
+      '未知': '❓', '未来': '❓', '开放式': '❓',
+      '体制内': '🏛️', '编制': '🏛️', '上岸': '🏛️', '处级': '🏛️',
+      '裁员': '⚠️', '失业': '⚠️', '危机': '⚠️',
+      '辞职': '🚪', '离开': '🚪', '跳槽': '🚪'
+    };
+
+    function getIcon(title) {
+      for (const [k, v] of Object.entries(ICON_MAP)) {
+        if (title.includes(k)) return v;
+      }
+      return '●';
+    }
+
+    // ============================================================
+    // 内置数据模板
+    // ============================================================
+    const BUILT_IN_DATA = {
+      architecture: {"metadata":{"title":"平行人生：如果当初选了另一条路","generated_at":"2026-05-20","real_route_id":"route_b"},"routes":[{"id":"route_a","label":"路线 A：设计院熬资历","short_label":"设计院路线","color":"#6FA66A","is_real":false,"summary":"本专业深耕，熬资历升主创→合伙人，收入稳定但天花板明显","nodes":[{"time_label":"3月","time_months":3,"title":"加班到凌晨","description":"连续赶图到凌晨2点，颈椎发出警告。看到辞职的同期开始在朋友圈晒自由生活，内心动摇但说服自己'稳定更重要'。","income":12000,"emotion":3.5,"health":4.0,"key_event":"第一次认真考虑辞职"},{"time_label":"1年","time_months":12,"title":"独立带小项目","description":"终于不再是画图工具人，开始带3人小团队做住宅项目。年薪涨到18万，但发现管理比画图更耗心力。","income":18000,"emotion":5.5,"health":5.0,"key_event":"第一次独立汇报方案"},{"time_label":"3年","time_months":36,"title":"主创设计师","description":"建筑行业持续下行，设计院裁员30%。幸存者偏差让你成了'幸运儿'，但项目越来越少，加班反而更多。","income":22000,"emotion":5.0,"health":4.5,"key_event":"见证3个同事被裁"},{"time_label":"10年","time_months":120,"title":"合伙人","description":"熬了十年终于进合伙人名单，年薪35万+分红。但行业萎缩，新项目主要靠老客户维护。身体落下慢性胃病。","income":35000,"emotion":5.5,"health":3.5,"key_event":"合伙人签字仪式"}],"irreversible_points":[{"at_month":24,"label":"升为项目负责，跳槽成本翻倍"},{"at_month":60,"label":"行业下行期，转型窗口关闭"}],"balance_sheet":{"time_freedom":3,"money":7,"relationship":5,"health":3,"meaning":4}},{"id":"route_b","label":"路线 B：辞职 all-in AI（真实路线）","short_label":"AI 转型路线","color":"#E74C3C","is_real":true,"summary":"从设计院辞职→行政复议系统→播客+内容创作，多元收入，探索边界","nodes":[{"time_label":"3月","time_months":3,"title":"收入断档，焦虑 peak","description":"存款只够撑6个月。每天6点起床学Python，晚上看AI论文到1点。第一个行政复议系统demo被客户说'太粗糙'。","income":2000,"emotion":3.0,"health":4.5,"key_event":"第一个付费用户（500元）"},{"time_label":"1年","time_months":12,"title":"行政复议系统跑通","description":"系统处理到第79个案子，月入稳定在8000。开始意识到'一个人+AI'的边界在哪里。播客第一期录制完成还没发。","income":8000,"emotion":6.5,"health":5.5,"key_event":"系统自动化率突破60%"},{"time_label":"3年","time_months":36,"title":"播客+AI 工具矩阵","description":"AI节目已录、粉丝群传播、项目展示页上线。行政复议系统+播客+内容创作三线并行。收入结构多元但总量天花板明显。","income":15000,"emotion":7.5,"health":6.0,"key_event":"播客首次被行业KOL转发"},{"time_label":"10年","time_months":120,"title":"？（开放式，由你续写）","description":"这会你在做什么？也许是一个小而美的AI工具工作室，也许是一个有影响力的内容IP，也许是完全不同的第三条路。","income":null,"emotion":null,"health":null,"key_event":"选择权在你手里"}],"irreversible_points":[{"at_month":6,"label":"设计资质过期，回不了设计院"},{"at_month":18,"label":"行政复议深度绑定，转型成本上升"}],"balance_sheet":{"time_freedom":8,"money":5,"relationship":6,"health":6,"meaning":8}},{"id":"route_c","label":"路线 C：考公上岸","short_label":"体制内路线","color":"#2ECC71","is_real":false,"summary":"考公→基层→科室负责人→处级，稳定但体制内化，社交圈收缩","nodes":[{"time_label":"3月","time_months":3,"title":"备考，社交清零","description":"每天刷题8小时，断绝所有无效社交。看到前同事辞职的消息，暗自庆幸'还好我选了稳妥的路'。","income":0,"emotion":4.0,"health":5.0,"key_event":"行测首次模考上70分"},{"time_label":"1年","time_months":12,"title":"基层岗位","description":"上岸了。月薪6000但五险一金拉满。工作内容是填表、开会、迎检。摄影器材在柜子里积灰。","income":6000,"emotion":4.5,"health":6.0,"key_event":"第一次独立处理群众信访"},{"time_label":"3年","time_months":36,"title":"科室负责人","description":"凭借建筑专业背景被借调到住建局。开始理解体制内运行的隐性规则。朋友圈从摄影展变成转发政策文件。","income":9000,"emotion":5.0,"health":5.5,"key_event":"首次主持科室会议"},{"time_label":"10年","time_months":120,"title":"处级干部","description":"45岁解决副处。收入+公积金+各类补贴折合年薪25万。孩子教育、老人医疗都有保障。偶尔想起年轻时的创意冲动，像是上辈子的事。","income":20000,"emotion":5.5,"health":4.0,"key_event":"分管第一个重大项目"}],"irreversible_points":[{"at_month":12,"label":"入编后35岁禁商条款生效"},{"at_month":48,"label":"体制内人脉深度绑定，市场技能退化"}],"balance_sheet":{"time_freedom":4,"money":6,"relationship":5,"health":5,"meaning":3}},{"id":"route_d","label":"路线 D：出国读硕转 UX","short_label":"出海路线","color":"#9B59B6","is_real":false,"summary":"北欧读硕→UX设计师→硅谷/远程，文化冲击+技术转型，彻底脱离国内赛道","nodes":[{"time_label":"3月","time_months":3,"title":"雅思+作品集","description":"存款见底，向父母借了10万。每天5小时雅思+3小时重做作品集。建筑设计思维和产品设计思维在脑中打架。","income":-3000,"emotion":4.0,"health":4.5,"key_event":"雅思首战6.5，不够"},{"time_label":"1年","time_months":12,"title":"北欧学校","description":"终于拿到offer。北欧的冬天下午3点就天黑，但设计系的同学来自20个国家，视野彻底打开。开始用Figma代替CAD。","income":-8000,"emotion":7.0,"health":6.5,"key_event":"第一个UX项目被教授打A"},{"time_label":"3年","time_months":36,"title":"硅谷 UX Designer","description":"OPT签证期拿到一家SaaS公司的offer。年薪8万美元，但房租就要3000刀。和国内的朋友时差12小时，联系渐少。","income":45000,"emotion":6.5,"health":6.0,"key_event":"H1B中签"},{"time_label":"10年","time_months":120,"title":"？（开放式，由你续写）","description":"也许你在湾区买了房，也许你已经回国远程工作，也许你在某个小众领域做出了名堂。硅谷的故事，版本太多。","income":null,"emotion":null,"health":null,"key_event":"选择权在你手里"}],"irreversible_points":[{"at_month":6,"label":"辞职出国，国内社保断缴、人脉断层"},{"at_month":30,"label":"H1B依赖雇主，回国成本骤增"}],"balance_sheet":{"time_freedom":5,"money":6,"relationship":3,"health":6,"meaning":7}}],"dimensions":{"balance_labels":{"time_freedom":"时间自由度","money":"经济保障","relationship":"关系质量","health":"身心健康","meaning":"意义感"}}},
+      tech: {
+        metadata: { title: '平行人生：互联网/技术', real_route_id: 'route_b' },
+        dimensions: { balance_labels: { time_freedom: '时间自由', money: '经济保障', relationship: '关系质量', health: '身心健康', meaning: '意义感' } },
+        routes: [
+          { id: 'route_a', label: '路线A：大厂深耕', short_label: '大厂路线', color: '#6FA66A', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '996转正', description: '连续996三个月后终于转正。凌晨打车回家，司机说你这行赚钱多。', income: 18000, emotion: 4, health: 4, key_event: '第一次独立完成需求评审' },
+              { time_label: '1年', title: 'P6升P7', description: '带3人小组做中台。年薪40万但时薪低得可怜。', income: 35000, emotion: 5.5, health: 4, key_event: '第一次带团队' },
+              { time_label: '3年', title: 'P8架构师', description: '行业裁员潮中幸存。技术债越堆越多，开会比写代码多。', income: 55000, emotion: 5, health: 3.5, key_event: '主导千万级重构项目' },
+              { time_label: '10年', title: 'P9总监', description: '年薪百万+股票。颈椎反弓，脂肪肝。同龄人要么转管理要么被优化。', income: 85000, emotion: 5.5, health: 2.5, key_event: '第一次给全员述职' }
+            ],
+            irreversible_points: [{ at_month: 12, label: '技术深度绑定，转型成本上升' }, { at_month: 48, label: '年龄红线，跳槽空间收窄' }],
+            balance_sheet: { time_freedom: 2, money: 9, relationship: 4, health: 2, meaning: 4 }
+          },
+          { id: 'route_b', label: '路线B：辞职创业（真实）', short_label: '创业路线', color: '#E74C3C', is_real: true,
+            nodes: [
+              { time_label: '3月', title: '车库起步', description: '存款烧了一半。第一个产品上线只有50个用户，其中30个是朋友。', income: -5000, emotion: 3.5, health: 5, key_event: '第一笔天使投资（20万）' },
+              { time_label: '1年', title: 'PMF验证', description: '产品终于有1000日活。收入刚够付房租。团队3人，每人身兼数职。', income: 8000, emotion: 6.5, health: 5, key_event: '第一个付费企业客户' },
+              { time_label: '3年', title: 'A轮融资', description: '融了500万，团队扩到15人。终于不用自己写前端了。', income: 25000, emotion: 7.5, health: 5.5, key_event: '投资人签字' },
+              { time_label: '10年', title: '？', description: '也许上市敲钟，也许公司卖了换自由。创业没有终点。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 6, label: '股权稀释，回不了大厂' }, { at_month: 24, label: '创业身份标签化，求职歧视' }],
+            balance_sheet: { time_freedom: 3, money: 6, relationship: 5, health: 5, meaning: 9 }
+          },
+          { id: 'route_c', label: '路线C：考公上岸', short_label: '体制内', color: '#2ECC71', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '刷题到秃', description: 'LeetCode停了，行测刷了3000道。头发掉了一半。', income: 0, emotion: 3.5, health: 4, key_event: '模考首次进前10%' },
+              { time_label: '1年', title: '信息中心科员', description: '负责维护内部OA系统。技术栈停留在10年前。', income: 8000, emotion: 4.5, health: 6, key_event: '第一次独立值班' },
+              { time_label: '3年', title: '科室副职', description: '开始理解体制内规则。GitHub账号半年没更新了。', income: 12000, emotion: 5, health: 5.5, key_event: '首次主导信息化项目招标' },
+              { time_label: '10年', title: '处级', description: '分管全市政务云。技术早忘光了，但权力感和稳定感是真实的。', income: 22000, emotion: 5.5, health: 4, key_event: '分管第一个亿级项目' }
+            ],
+            irreversible_points: [{ at_month: 12, label: '入编禁商条款生效' }, { at_month: 48, label: '技术栈断层，市场技能退化' }],
+            balance_sheet: { time_freedom: 5, money: 6, relationship: 5, health: 5, meaning: 3 }
+          },
+          { id: 'route_d', label: '路线D：出国读硕', short_label: '出海', color: '#9B59B6', is_real: false,
+            nodes: [
+              { time_label: '3月', title: 'GRE+文书', description: '背了5000个单词，文书改了20版。存款见底。', income: -4000, emotion: 4, health: 4.5, key_event: 'GRE首考325' },
+              { time_label: '1年', title: 'CMU硕士', description: '课程强度是本科两倍。同学来自全球，视野打开。', income: -10000, emotion: 7, health: 6, key_event: '第一个AI项目demo' },
+              { time_label: '3年', title: '硅谷工程师', description: '入职OpenAI附近某厂。年薪15万美元，房租4000刀。', income: 60000, emotion: 6.5, health: 5.5, key_event: 'OPT转H1B' },
+              { time_label: '10年', title: '？', description: '湾区买了房？还是回国了？硅谷的故事，版本太多。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 6, label: '辞职出国，国内社保断缴' }, { at_month: 30, label: 'H1B依赖雇主，回国成本骤增' }],
+            balance_sheet: { time_freedom: 5, money: 7, relationship: 3, health: 6, meaning: 7 }
+          }
+        ]
+      },
+      finance: {
+        metadata: { title: '平行人生：金融/商务', real_route_id: 'route_a' },
+        dimensions: { balance_labels: { time_freedom: '时间自由', money: '经济保障', relationship: '关系质量', health: '身心健康', meaning: '意义感' } },
+        routes: [
+          { id: 'route_a', label: '路线A：银行深耕', short_label: '银行路线', color: '#6FA66A', is_real: true,
+            nodes: [
+              { time_label: '3月', title: '柜员日常', description: '每天数钱、盖章、面对各种客户。下班后手都在抖。', income: 6000, emotion: 4, health: 5, key_event: '第一次独立处理百万级转账' },
+              { time_label: '1年', title: '客户经理', description: '存款任务压得人喘不过气。但慢慢有了自己的客户群。', income: 12000, emotion: 5, health: 4.5, key_event: '拉到第一个百万存款' },
+              { time_label: '3年', title: '支行副行长', description: '应酬多到胃出血。但收入翻倍，家庭生活质量提升。', income: 25000, emotion: 5.5, health: 3, key_event: '分管对公业务' },
+              { time_label: '10年', title: '分行行长', description: '年薪60万+绩效。三高全齐，但孩子上了国际学校。', income: 50000, emotion: 5, health: 2, key_event: '第一次主持分行年度会议' }
+            ],
+            irreversible_points: [{ at_month: 24, label: '客户资源绑定，跳槽损失大' }, { at_month: 60, label: '年龄+职级双重瓶颈' }],
+            balance_sheet: { time_freedom: 2, money: 8, relationship: 5, health: 2, meaning: 4 }
+          },
+          { id: 'route_b', label: '路线B：转型投行', short_label: '投行路线', color: '#E74C3C', is_real: false,
+            nodes: [
+              { time_label: '3月', title: 'CFA一级', description: '白天上班晚上备考。CFA厚厚的三本书，像在爬一座山。', income: 6000, emotion: 3.5, health: 4, key_event: 'CFA一级通过' },
+              { time_label: '1年', title: '投行分析师', description: '进了小券商投行部。底薪8000但项目奖诱人。', income: 15000, emotion: 5.5, health: 3.5, key_event: '第一个IPO项目进场' },
+              { time_label: '3年', title: 'VP副总裁', description: '年薪50万+项目提成。出差比回家多，女朋友分了。', income: 40000, emotion: 5, health: 3, key_event: '主导第一个过亿并购案' },
+              { time_label: '10年', title: 'MD董事总经理', description: '年薪200万+。但行业的周期性让人时刻紧张。', income: 120000, emotion: 5.5, health: 2.5, key_event: '独立团队年度业绩第一' }
+            ],
+            irreversible_points: [{ at_month: 18, label: '投行身份标签化' }, { at_month: 36, label: '收入结构依赖项目奖，退路窄' }],
+            balance_sheet: { time_freedom: 1, money: 10, relationship: 3, health: 2, meaning: 5 }
+          },
+          { id: 'route_c', label: '路线C：考公', short_label: '体制内', color: '#2ECC71', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '备考金融局', description: '行测+申论+金融专业知识。每天学习10小时。', income: 0, emotion: 4, health: 4.5, key_event: '模考综合第一' },
+              { time_label: '1年', title: '金融监管科员', description: '负责现场检查。银行的人见了你客客气气。', income: 9000, emotion: 5, health: 5.5, key_event: '第一次独立带队检查' },
+              { time_label: '3年', title: '处室负责人', description: '开始理解监管与市场的微妙平衡。', income: 15000, emotion: 5.5, health: 5, key_event: '起草第一份行业监管文件' },
+              { time_label: '10年', title: '司长', description: '政策影响力覆盖全国。但市场化技能已经生疏。', income: 28000, emotion: 6, health: 4, key_event: '主导行业重大政策出台' }
+            ],
+            irreversible_points: [{ at_month: 12, label: '入编禁商' }, { at_month: 60, label: '体制内深度绑定' }],
+            balance_sheet: { time_freedom: 4, money: 7, relationship: 6, health: 5, meaning: 6 }
+          },
+          { id: 'route_d', label: '路线D：出国MBA', short_label: '出海', color: '#9B59B6', is_real: false,
+            nodes: [
+              { time_label: '3月', title: 'GMAT+申请', description: 'GMAT考了720。申请费就花了3万。', income: -5000, emotion: 4.5, health: 5, key_event: '收到沃顿offer' },
+              { time_label: '1年', title: '沃顿MBA', description: '同学都是未来的CEO。案例讨论到凌晨。', income: -15000, emotion: 7.5, health: 5, key_event: '第一个咨询项目' },
+              { time_label: '3年', title: '纽约对冲基金', description: '年薪20万美元。但每天工作14小时。', income: 80000, emotion: 5.5, health: 4, key_event: '管理第一只百万级组合' },
+              { time_label: '10年', title: '？', description: '也许成了合伙人，也许 burnout 转行。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 6, label: '辞职出国' }, { at_month: 24, label: '海外职业路径依赖' }],
+            balance_sheet: { time_freedom: 2, money: 9, relationship: 3, health: 4, meaning: 6 }
+          }
+        ]
+      },
+      education: {
+        metadata: { title: '平行人生：教育/学术', real_route_id: 'route_a' },
+        dimensions: { balance_labels: { time_freedom: '时间自由', money: '经济保障', relationship: '关系质量', health: '身心健康', meaning: '意义感' } },
+        routes: [
+          { id: 'route_a', label: '路线A：高校教职', short_label: '学术路线', color: '#6FA66A', is_real: true,
+            nodes: [
+              { time_label: '3月', title: '博后进站', description: '实验室打卡，paper还没影。导师催得紧。', income: 8000, emotion: 4, health: 5, key_event: '第一个独立实验设计' },
+              { time_label: '1年', title: '助理教授', description: '非升即走压力大。教学和科研两头烧。', income: 12000, emotion: 4.5, health: 4.5, key_event: '第一篇SCI二区' },
+              { time_label: '3年', title: '副教授', description: '终于拿到tenure。但学术内卷越来越严重。', income: 18000, emotion: 5.5, health: 4, key_event: '拿到第一个国自然' },
+              { time_label: '10年', title: '教授博导', description: '带10个研究生。工资不高但时间自由。真正的学术生活才开始。', income: 25000, emotion: 6.5, health: 4, key_event: '院士提名' }
+            ],
+            irreversible_points: [{ at_month: 36, label: 'tenure轨道锁定' }, { at_month: 72, label: '学术圈子深度绑定' }],
+            balance_sheet: { time_freedom: 7, money: 5, relationship: 6, health: 4, meaning: 8 }
+          },
+          { id: 'route_b', label: '路线B：培训创业', short_label: '创业路线', color: '#E74C3C', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '录第一节课', description: '在出租屋录课。第一门课卖了3份。', income: 2000, emotion: 4, health: 5, key_event: '第一个付费学生' },
+              { time_label: '1年', title: '小工作室', description: '课程矩阵成型，月入2万。但平台抽成30%。', income: 15000, emotion: 6, health: 5, key_event: '第一个爆款课（1万人购买）' },
+              { time_label: '3年', title: '教培品牌', description: '团队20人，年营收500万。双减政策后转型素质教育。', income: 30000, emotion: 6.5, health: 5, key_event: '获得A轮融资' },
+              { time_label: '10年', title: '？', description: '也许做成了教育集团，也许回到学校教书。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 12, label: '离开学术轨道' }, { at_month: 36, label: '教培政策风险' }],
+            balance_sheet: { time_freedom: 5, money: 7, relationship: 5, health: 5, meaning: 7 }
+          },
+          { id: 'route_c', label: '路线C：自媒体', short_label: '自媒体', color: '#2ECC71', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '第一条视频', description: '在B站发知识科普。播放量200，弹幕3条。', income: 500, emotion: 4, health: 5.5, key_event: '第一个粉丝私信感谢' },
+              { time_label: '1年', title: '10万粉', description: '商单开始找上门。月入8000但作息完全乱了。', income: 8000, emotion: 6.5, health: 4, key_event: '第一个品牌合作' },
+              { time_label: '3年', title: '知识IP', description: '全网100万粉。课程+广告+出书多元收入。', income: 25000, emotion: 7, health: 4, key_event: '第一本书出版' },
+              { time_label: '10年', title: '？', description: '流量会过期，内容不会。也许转型做智库。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 18, label: '学术身份淡化' }, { at_month: 48, label: '平台算法依赖' }],
+            balance_sheet: { time_freedom: 8, money: 6, relationship: 5, health: 4, meaning: 7 }
+          },
+          { id: 'route_d', label: '路线D：出国读博', short_label: '出海', color: '#9B59B6', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '套磁+申请', description: '给30个教授发邮件，回了3个。', income: -3000, emotion: 4, health: 5, key_event: '拿到全奖offer' },
+              { time_label: '1年', title: '博一', description: '课程+实验室+助教。比国内忙但资源好。', income: 8000, emotion: 6, health: 5, key_event: '第一篇workshop paper' },
+              { time_label: '3年', title: '博三', description: '论文中了顶会。开始考虑学术界还是工业界。', income: 10000, emotion: 6.5, health: 4.5, key_event: '第一篇顶会oral' },
+              { time_label: '10年', title: '？', description: '也许成了教授，也许去了大厂研究院。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 6, label: '国内教职窗口关闭' }, { at_month: 48, label: '海外学术路径依赖' }],
+            balance_sheet: { time_freedom: 6, money: 5, relationship: 3, health: 5, meaning: 8 }
+          }
+        ]
+      },
+      gov: {
+        metadata: { title: '平行人生：体制内', real_route_id: 'route_a' },
+        dimensions: { balance_labels: { time_freedom: '时间自由', money: '经济保障', relationship: '关系质量', health: '身心健康', meaning: '意义感' } },
+        routes: [
+          { id: 'route_a', label: '路线A：基层晋升', short_label: '晋升路线', color: '#6FA66A', is_real: true,
+            nodes: [
+              { time_label: '3月', title: '适应期', description: '填表、迎检、写材料。大学时学的全用不上。', income: 6000, emotion: 4, health: 5.5, key_event: '第一次独立写年终总结' },
+              { time_label: '1年', title: '业务骨干', description: '成了科里最会写材料的人。但代价是周末都在加班。', income: 8000, emotion: 4.5, health: 4.5, key_event: '材料被领导表扬' },
+              { time_label: '3年', title: '副科长', description: '开始理解体制内运行的隐性规则。学会说"研究研究"。', income: 12000, emotion: 5, health: 4, key_event: '第一次列席党组会' },
+              { time_label: '10年', title: '处长', description: '分管一方。权力感和束缚感同样强烈。孩子上了好学校。', income: 22000, emotion: 5.5, health: 3.5, key_event: '主导区域重大项目' }
+            ],
+            irreversible_points: [{ at_month: 24, label: '体制内人脉深度绑定' }, { at_month: 60, label: '市场化技能基本退化' }],
+            balance_sheet: { time_freedom: 3, money: 6, relationship: 6, health: 4, meaning: 5 }
+          },
+          { id: 'route_b', label: '路线B：下海创业', short_label: '创业路线', color: '#E74C3C', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '辞职挣扎', description: '纠结了三个月才递辞职报告。家人强烈反对。', income: 0, emotion: 3, health: 4, key_event: '最后一次打卡下班' },
+              { time_label: '1年', title: '小微创业', description: '利用体制内积累的人脉做政府项目外包。第一单赚了8万。', income: 10000, emotion: 5.5, health: 4.5, key_event: '第一个政府外包项目' },
+              { time_label: '3年', title: '公司上轨道', description: '年营收200万。但关系型生意不持久，开始思考转型。', income: 25000, emotion: 6, health: 4, key_event: '第一次公开招标中标' },
+              { time_label: '10年', title: '？', description: '也许做成了规模企业，也许回到了体制。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 6, label: '编制丢失，回不去' }, { at_month: 36, label: '人脉资源耗尽风险' }],
+            balance_sheet: { time_freedom: 4, money: 7, relationship: 5, health: 4, meaning: 6 }
+          },
+          { id: 'route_c', label: '路线C：继续熬', short_label: '熬资历', color: '#2ECC71', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '心态调整', description: '接受了自己的平凡。每天准时上下班，不再想升职。', income: 6000, emotion: 5, health: 6, key_event: '第一次拒绝周末加班' },
+              { time_label: '1年', title: '科员老黄牛', description: '不求有功但求无过。发展了摄影和钓鱼两个爱好。', income: 8000, emotion: 5.5, health: 6.5, key_event: '摄影作品获市级奖' },
+              { time_label: '3年', title: '解决副科', description: '论资排辈终于轮到。不惊喜也不意外。', income: 11000, emotion: 5.5, health: 6, key_event: '任命文件下发' },
+              { time_label: '10年', title: '调研员退休前', description: '工资不高但稳定。最大的投资是孩子的教育和自己的健康。', income: 18000, emotion: 6, health: 5, key_event: '开始规划退休生活' }
+            ],
+            irreversible_points: [{ at_month: 48, label: '年龄到线，晋升通道关闭' }],
+            balance_sheet: { time_freedom: 6, money: 5, relationship: 7, health: 6, meaning: 5 }
+          },
+          { id: 'route_d', label: '路线D：转行教育', short_label: '转行', color: '#9B59B6', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '考证备考', description: '教师资格证+普通话。每天下班后学习到12点。', income: 6000, emotion: 4, health: 4.5, key_event: '教资笔试通过' },
+              { time_label: '1年', title: '民办学校教师', description: '工资降了但心情好了。每天和孩子们在一起。', income: 8000, emotion: 6, health: 5.5, key_event: '第一次独立带班' },
+              { time_label: '3年', title: '教研组长', description: '开始带新老师。找到了体制外的价值感。', income: 12000, emotion: 6.5, health: 5.5, key_event: '公开课获市级一等奖' },
+              { time_label: '10年', title: '？', description: '也许成了校长，也许做了教育自媒体。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 12, label: '编制放弃，收入下降' }, { at_month: 36, label: '教育行业新轨道锁定' }],
+            balance_sheet: { time_freedom: 6, money: 5, relationship: 7, health: 6, meaning: 7 }
+          }
+        ]
+      },
+      freelance: {
+        metadata: { title: '平行人生：自由职业', real_route_id: 'route_a' },
+        dimensions: { balance_labels: { time_freedom: '时间自由', money: '经济保障', relationship: '关系质量', health: '身心健康', meaning: '意义感' } },
+        routes: [
+          { id: 'route_a', label: '路线A：深耕手艺', short_label: '深耕路线', color: '#6FA66A', is_real: true,
+            nodes: [
+              { time_label: '3月', title: '接单生存', description: '在猪八戒网接活。第一个logo收了200块。', income: 3000, emotion: 4, health: 5, key_event: '第一个回头客' },
+              { time_label: '1年', title: '口碑积累', description: '老客户介绍新客户。月入8000，比上班自由。', income: 8000, emotion: 6, health: 5.5, key_event: '第一个万元大单' },
+              { time_label: '3年', title: '细分领域专家', description: '专做医疗品牌设计。单价涨了3倍。', income: 18000, emotion: 6.5, health: 5, key_event: '作品被行业杂志报道' },
+              { time_label: '10年', title: '行业标杆', description: '收徒、出书、做评审。自由职业的天花板比想象中高。', income: 35000, emotion: 7, health: 4.5, key_event: '出版第一本作品集' }
+            ],
+            irreversible_points: [{ at_month: 24, label: '客户依赖，被动收入少' }, { at_month: 60, label: '体力下降，产能受限' }],
+            balance_sheet: { time_freedom: 9, money: 6, relationship: 5, health: 5, meaning: 8 }
+          },
+          { id: 'route_b', label: '路线B：开工作室', short_label: '工作室', color: '#E74C3C', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '招第一个员工', description: '从一个人变成两个人。管理比做设计难多了。', income: 5000, emotion: 4.5, health: 4.5, key_event: '签下第一个全职合同' },
+              { time_label: '1年', title: '5人小团队', description: '租了办公室。房租占收入的30%。', income: 12000, emotion: 5.5, health: 4, key_event: '第一个年度盈利' },
+              { time_label: '3年', title: '15人公司', description: '不再亲手做设计了。每天见客户、管团队、看报表。', income: 30000, emotion: 5, health: 4, key_event: '搬进新办公室' },
+              { time_label: '10年', title: '？', description: '也许成了行业知名公司，也许回到了一个人的状态。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 12, label: '从创作者变成管理者' }, { at_month: 36, label: '公司运营成本锁定' }],
+            balance_sheet: { time_freedom: 4, money: 7, relationship: 5, health: 4, meaning: 6 }
+          },
+          { id: 'route_c', label: '路线C：回归职场', short_label: '回归', color: '#2ECC71', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '求职焦虑', description: '投了50份简历，面试5次。gap year被反复追问。', income: 0, emotion: 3, health: 4, key_event: '第一个面试邀请' },
+              { time_label: '1年', title: '设计总监', description: '进了一家创业公司做设计总监。工资稳定了但自由度少了。', income: 18000, emotion: 5, health: 5, key_event: '入职第一天' },
+              { time_label: '3年', title: 'VP产品', description: '从设计转到产品。发现产品思维是另一种创造力。', income: 35000, emotion: 6, health: 4.5, key_event: '主导第一个从0到1产品' },
+              { time_label: '10年', title: '？', description: '也许成了CPO，也许再次创业。职场没有终点。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 6, label: '自由职业身份淡化' }, { at_month: 24, label: '职场晋升轨道锁定' }],
+            balance_sheet: { time_freedom: 3, money: 8, relationship: 6, health: 4, meaning: 6 }
+          },
+          { id: 'route_d', label: '路线D：数字游民', short_label: '游民', color: '#9B59B6', is_real: false,
+            nodes: [
+              { time_label: '3月', title: '第一次远程', description: '在大理租了间民宿。网速不稳定，但风景好。', income: 6000, emotion: 6, health: 6, key_event: '第一个远程项目交付' },
+              { time_label: '1年', title: '全球移动', description: '曼谷- Lisbon - 巴厘岛。每三个月换一个城市。', income: 10000, emotion: 7, health: 6, key_event: '建立了5个国家的客户网络' },
+              { time_label: '3年', title: '半定居状态', description: '在清迈买了公寓。找到了工作和生活的平衡点。', income: 15000, emotion: 7.5, health: 6.5, key_event: '清迈公寓交割' },
+              { time_label: '10年', title: '？', description: '也许有了家庭回到国内，也许一直在路上。', income: null, emotion: null, health: null, key_event: '选择权在你手里' }
+            ],
+            irreversible_points: [{ at_month: 18, label: '国内社保断缴' }, { at_month: 36, label: '长期漂泊，关系网络弱化' }],
+            balance_sheet: { time_freedom: 10, money: 5, relationship: 3, health: 7, meaning: 7 }
+          }
+        ]
+      }
+    };
+
+    // ============================================================
+    // 状态
+    // ============================================================
+    let routesData = [];
+    let dimensionLabels = {};
+    let selectedCareerId = null;
+    let currentScene = 0;
+    let gameState = null;
+
+    const SAVE_KEY = 'parallel-life-save';
+    const META_KEY = 'parallel-life-meta';
+    const GAME_STEPS = ['3个月后', '6个月后', '1年后', '2年后', '3年后', '10年后'];
+
+    function expandRouteNodes(route) {
+      const orig = route.nodes;
+      if (orig.length >= 6) return route;
+      const timeLabels = ['3个月后', '6个月后', '1年后', '2年后', '3年后', '10年后'];
+      const timeMonths = [3, 6, 12, 24, 36, 120];
+      const rawMap = [0, null, 1, null, 2, 3];
+      const expanded = [];
+      for (let i = 0; i < 6; i++) {
+        const rawIdx = rawMap[i];
+        if (rawIdx !== null) {
+          expanded.push({ ...orig[rawIdx], time_label: timeLabels[i], time_months: timeMonths[i] });
+        } else {
+          const prev = orig[rawMap[i - 1]];
+          const next = orig[rawMap[i + 1]];
+          const mid = (a, b) => (a == null || b == null) ? null : Math.round((a + b) / 2);
+          const seed = ((route.id || '').charCodeAt(0) || 0) + i * 7;
+          const prevT = (prev.title || '').slice(0, 6);
+          const nextT = (next.title || '').slice(0, 6);
+          const titles = [`${prevT}的延续`, `${prevT}之后`, `从${prevT}到${nextT}`];
+          expanded.push({
+            time_label: timeLabels[i],
+            time_months: timeMonths[i],
+            title: titles[seed % titles.length],
+            description: `从"${prev.title || ''}"走向"${next.title || ''}"的过渡阶段。惯性在推着你向前，但你仍可以改变方向。`,
+            income: mid(prev.income, next.income),
+            emotion: mid(prev.emotion, next.emotion),
+            health: mid(prev.health, next.health),
+            key_event: `过渡：${(prev.key_event || '').slice(0, 10)}...`
+          });
+        }
+      }
+      return { ...route, nodes: expanded };
+    }
+
+    // ============================================================
+    // Meta 进度系统（人生阅历）
+    // ============================================================
+    const META_LEVELS = [
+      { level: 1,  xp: 0,   reward: null, label: '初入职场' },
+      { level: 2,  xp: 3,   reward: 'relic_slot', label: '站稳脚跟', desc: '开局可携带1个纪念品' },
+      { level: 3,  xp: 8,   reward: null, label: '初识规则' },
+      { level: 4,  xp: 15,  reward: null, label: '游刃有余' },
+      { level: 5,  xp: 25,  reward: 'side_route', label: '斜杠青年', desc: '解锁「副业路线」模板' },
+      { level: 6,  xp: 40,  reward: null, label: '视野开阔' },
+      { level: 7,  xp: 60,  reward: null, label: '多线并行' },
+      { level: 8,  xp: 85,  reward: 'stat_bonus', label: '成熟稳重', desc: '开局五维全属性+1' },
+      { level: 9,  xp: 115, reward: null, label: '通透练达' },
+      { level: 10, xp: 150, reward: null, label: '独当一面' },
+      { level: 11, xp: 200, reward: null, label: '自成体系' },
+      { level: 12, xp: 260, reward: 'review_mode', label: '复盘高手', desc: '解锁「复盘模式」，默认展开人生地图' },
+      { level: 13, xp: 330, reward: null, label: '见多识广' },
+      { level: 14, xp: 420, reward: null, label: '举重若轻' },
+      { level: 15, xp: 530, reward: 'second_relic', label: '双轨并行', desc: '可携带2个纪念品' },
+      { level: 16, xp: 660, reward: null, label: '炉火纯青' },
+      { level: 17, xp: 820, reward: null, label: '返璞归真' },
+      { level: 18, xp: 1010,reward: null, label: '大智若愚' },
+      { level: 19, xp: 1240,reward: null, label: '洞察本质' },
+      { level: 20, xp: 1520,reward: 'custom_career', label: '自定义人生', desc: '解锁「自定义职业」输入' }
+    ];
+
+    function getMetaProgress() {
+      try {
+        const raw = localStorage.getItem(META_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { console.warn('读取Meta进度失败', e); }
+      return { xp: 0, totalGames: 0, uniqueEndings: [], unlockedFeatures: [], relics: [], highestScore: 0 };
+    }
+
+    function saveMetaProgress(meta) {
+      try {
+        localStorage.setItem(META_KEY, JSON.stringify(meta));
+      } catch (e) { console.warn('写入Meta进度失败', e); }
+    }
+
+    function computeLevel(xp) {
+      for (let i = META_LEVELS.length - 1; i >= 0; i--) {
+        if (xp >= META_LEVELS[i].xp) return META_LEVELS[i];
+      }
+      return META_LEVELS[0];
+    }
+
+    function getNextLevel(xp) {
+      for (let i = 0; i < META_LEVELS.length; i++) {
+        if (xp < META_LEVELS[i].xp) return META_LEVELS[i];
+      }
+      return null;
+    }
+
+    function awardGameEnd(endingTitle, score) {
+      const meta = getMetaProgress();
+      meta.totalGames += 1;
+      if (!meta.uniqueEndings.includes(endingTitle)) {
+        meta.uniqueEndings.push(endingTitle);
+      }
+      if (score > meta.highestScore) meta.highestScore = score;
+
+      // XP 计算
+      let gained = 1; // 完成一局
+      if (meta.uniqueEndings.includes(endingTitle) && meta.uniqueEndings.length === meta.uniqueEndings.filter(e => e === endingTitle).length) {
+        // 首次解锁该结局类型
+        gained += 3;
+      }
+      // 破纪录加分
+      if (score === meta.highestScore && meta.totalGames > 1) gained += 1;
+
+      const oldLevel = computeLevel(meta.xp);
+      meta.xp += gained;
+      const newLevel = computeLevel(meta.xp);
+
+      // 解锁新奖励
+      if (newLevel.level > oldLevel.level && newLevel.reward && !meta.unlockedFeatures.includes(newLevel.reward)) {
+        meta.unlockedFeatures.push(newLevel.reward);
+      }
+
+      saveMetaProgress(meta);
+      return { meta, gained, leveledUp: newLevel.level > oldLevel.level, oldLevel, newLevel };
+    }
+
+    function hasFeature(featureId) {
+      return getMetaProgress().unlockedFeatures.includes(featureId);
+    }
+
+    function getStartStatsBonus() {
+      const meta = getMetaProgress();
+      const lvl = computeLevel(meta.xp);
+      if (lvl.level >= 8) {
+        return { money: 1, health: 1, relationship: 1, meaning: 1, freedom: 1 };
+      }
+      return { money: 0, health: 0, relationship: 0, meaning: 0, freedom: 0 };
+    }
+    const STAT_META = {
+      money: { label: '钱', color: '#44d07b', icon: '💰' },
+      health: { label: '健康', color: '#ffb454', icon: '❤️' },
+      relationship: { label: '关系', color: '#ff7ab6', icon: '👥' },
+      meaning: { label: '意义', color: '#9bdf65', icon: '✨' },
+      freedom: { label: '自由', color: '#d7b46a', icon: '🕊️' }
+    };
+    const BASE_STATS = { money: 5, health: 6, relationship: 5, meaning: 5, freedom: 5 };
+    const RANDOM_EVENTS = [
+      {
+        title: '老同学突然拉你入局',
+        body: '一个很久没联系的人抛来机会，听起来不稳，但窗口期只有今晚。',
+        impact: { money: 1, health: -1, relationship: 1, meaning: 0, freedom: -1 },
+        tag: '人情机会'
+      },
+      {
+        title: '家里临时需要你兜底',
+        body: '计划被现实打断。你可以硬扛，也可以承认这局资源不够。',
+        impact: { money: -1, health: -1, relationship: 2, meaning: 0, freedom: -1 },
+        tag: '家庭牵引'
+      },
+      {
+        title: '平台规则一夜变了',
+        body: '昨天还有效的方法，今天突然不再奖励你。你必须重新押注。',
+        impact: { money: -1, health: 0, relationship: 0, meaning: 1, freedom: 1 },
+        tag: '规则变化'
+      },
+      {
+        title: '身体发出警告',
+        body: '不是大病，但足够让你意识到：时间不是无限筹码。',
+        impact: { money: 0, health: -2, relationship: 0, meaning: 1, freedom: 0 },
+        tag: '健康警报'
+      },
+      {
+        title: '贵人只给一次机会',
+        body: '对方不保证结果，只保证把门打开。你得马上决定要不要进去。',
+        impact: { money: 1, health: 0, relationship: 1, meaning: 1, freedom: -1 },
+        tag: '稀缺入口'
+      },
+      {
+        title: '你突然被看见了',
+        body: '一条作品、一次汇报或一个小项目被转发，新的期待也跟着来了。',
+        impact: { money: 1, health: -1, relationship: 0, meaning: 2, freedom: 0 },
+        tag: '曝光红利'
+      },
+      {
+        title: '关系里有人失望了',
+        body: '你不是做错了，只是这次选择让别人付了成本。',
+        impact: { money: 0, health: 0, relationship: -2, meaning: 1, freedom: 1 },
+        tag: '关系代价'
+      },
+      {
+        title: '意外的空档出现',
+        body: '原本排满的日程突然空出一块。用来休息，还是用来加码？',
+        impact: { money: 0, health: 1, relationship: 0, meaning: 0, freedom: 2 },
+        tag: '时间裂缝'
+      }
+    ];
+    const DEFAULT_EVENT_RESPONSE_ID = 'steady';
+    const EVENT_RESPONSES = [
+      {
+        id: 'steady',
+        label: '稳住',
+        hint: '先控损',
+        impact: { health: 1 },
+        mitigate: 1,
+        combat: { strike: -1, guard: 2, recoil: -1 }
+      },
+      {
+        id: 'leverage',
+        label: '借势',
+        hint: '变故转机会',
+        impact: { health: -1, meaning: 1, freedom: 1 },
+        mitigate: 0,
+        combat: { strike: 2, guard: 0, recoil: 1 }
+      },
+      {
+        id: 'support',
+        label: '求援',
+        hint: '用关系换缓冲',
+        impact: { money: -1, relationship: 2 },
+        mitigate: 0,
+        combat: { strike: 0, guard: 2, recoil: 0 }
+      }
+    ];
+    const RESPONSE_COPY_BY_TAG = {
+      '人情机会': [
+        { label: '婉拒', hint: '不欠人情，也不错过睡眠' },
+        { label: '跟进去看', hint: '窗口期很短' },
+        { label: '拉个信得过的朋友一起', hint: '分摊风险，也分摊判断' }
+      ],
+      '家庭牵引': [
+        { label: '硬扛', hint: '自己消化，不麻烦别人' },
+        { label: '重新排优先级', hint: '有些事情比工作更重要' },
+        { label: '找兄弟姐妹分担', hint: '不独自扛所有' }
+      ],
+      '规则变化': [
+        { label: '观望两天', hint: '等风向明确' },
+        { label: '抢先适应新规则', hint: '做第一批上岸的人' },
+        { label: '和同行通个气', hint: '抱团比单打独斗安全' }
+      ],
+      '健康警报': [
+        { label: '先躺平一周', hint: '暂停不是放弃' },
+        { label: '借这个机会重新规划', hint: '病是身体在逼你做决定' },
+        { label: '让团队顶一顶', hint: '学会放手' }
+      ],
+      '稀缺入口': [
+        { label: '再想想', hint: '不做冲动决定' },
+        { label: '推门进去', hint: '先占位置，再想办法' },
+        { label: '问问信得过的人', hint: '多听一个视角' }
+      ],
+      '曝光红利': [
+        { label: '低调处理', hint: '热度会过去' },
+        { label: '接住这波流量', hint: '趁热打铁' },
+        { label: '找个人一起扛', hint: '别一个人接所有期待' }
+      ],
+      '关系代价': [
+        { label: '去解释', hint: '争取理解' },
+        { label: '接受后果', hint: '有些代价必须付' },
+        { label: '让第三方调和', hint: '不正面刚' }
+      ],
+      '时间裂缝': [
+        { label: '躺平', hint: '休息也是正事' },
+        { label: '加码', hint: '窗口期不等人' },
+        { label: '约个人吃饭', hint: '用空档修复关系' }
+      ]
+    };
+
+    // ============================================================
+    // 圣遗物系统（人生纪念品）
+    // ============================================================
+    const RELIC_CATALOG = [
+      // —— 设计院/加班系 ——
+      {
+        id: 'midnight_coffee',
+        name: '凌晨三点的咖啡杯',
+        story: '设计院熬资历路线第三站。你连续加班第47天，这杯冷掉的咖啡是你和凌晨唯一的盟约。它救了那个方案，也帮你决定了下一局不要再来一杯。',
+        trigger: { anyRouteId: ['route_a'], minStep: 2, statCheck: { health: { max: 5 } } },
+        buff: { stat: 'health', value: 1, flavor: '开局健康+1（你学会了设闹钟）' },
+        rarity: 'common',
+        category: '加班'
+      },
+      {
+        id: 'first_resignation',
+        name: '第一封辞职信',
+        story: '在一个周五下午，你终于打出了那封辞职信。打印机吐纸的声音让你心跳加速。你没有立刻发出，但你知道了自己还能拒绝。',
+        trigger: { anyRouteId: ['route_b'], minStep: 1, statCheck: { meaning: { min: 6 } } },
+        buff: { stat: 'freedom', value: 1, flavor: '开局自由+1（你知道了什么是底线）' },
+        rarity: 'common',
+        category: '转型'
+      },
+      {
+        id: 'exam_book',
+        name: '被翻烂的备考书',
+        story: '考公路线的起点。那本行测真题集被你翻到脱页，每一页都有焦虑画下的重点线。它见证了你最不确定的三个月。',
+        trigger: { anyRouteId: ['route_c'], minStep: 0, statCheck: { money: { max: 3 } } },
+        buff: { stat: 'meaning', value: 1, flavor: '开局意义+1（你知道什么是苦功）' },
+        rarity: 'common',
+        category: '备考'
+      },
+      {
+        id: 'passport_stamp',
+        name: '护照上的第一个章',
+        story: '出国路线的第一站。你站在海关窗口前，护照上多了一个蓝色印章。那不是签证，是你拆掉了第一面墙。',
+        trigger: { anyRouteId: ['route_d'], minStep: 0 },
+        buff: { stat: 'freedom', value: 1, flavor: '开局自由+1（世界变大了）' },
+        rarity: 'common',
+        category: '出国'
+      },
+      // —— 健康/关系系 ——
+      {
+        id: 'hospital_wristband',
+        name: '医院的蓝色手环',
+        story: '身体发出警告的一局。你在急诊室等检查结果时，盯着手腕上的蓝色手环想了很久——它是你唯一一次被强制按下暂停。',
+        trigger: { statCheck: { health: { max: 2 } }, minStep: 2 },
+        buff: { stat: 'health', value: 2, flavor: '开局健康+2（你终于懂得认输的价值）' },
+        rarity: 'rare',
+        category: '健康'
+      },
+      {
+        id: 'friends_photo',
+        name: '老友聚会合影',
+        story: '你在这局里丢掉了大部分关系，但照片角落里那个笑起来没心没肺的人，让你在寒夜里没有彻底冷掉。',
+        trigger: { statCheck: { relationship: { max: 3 } }, minStep: 3 },
+        buff: { stat: 'relationship', value: 2, flavor: '开局关系+2（孤独让你更珍惜联结）' },
+        rarity: 'rare',
+        category: '关系'
+      },
+      {
+        id: 'empty_wallet',
+        name: '空空的钱包',
+        story: '你在这局里穷到连外卖都不敢点。但这张被磨得发亮的旧钱包，提醒你：钱会流走，但你会记住每一分来之不易的快乐。',
+        trigger: { statCheck: { money: { max: 2 } }, minStep: 2 },
+        buff: { stat: 'money', value: 2, flavor: '开局经济+2（穷过的记忆不会白费）' },
+        rarity: 'rare',
+        category: '经济'
+      },
+      // —— 极致路线系 ——
+      {
+        id: 'golden_balance',
+        name: '完美的平衡石',
+        story: '你把五项指标稳稳地维持在中上区间——没有爆表的，也没有短板。这块石头在提醒你：平衡本身就是一种天赋。',
+        trigger: { statCheck: { money: { min: 5, max: 7 }, health: { min: 5, max: 7 }, relationship: { min: 5, max: 7 }, meaning: { min: 5, max: 7 }, freedom: { min: 5, max: 7 } } },
+        buff: { stat: 'all', value: 0, flavor: '开局行动力最大值+4（稳是一种力量）', special: 'resolve_boost' },
+        rarity: 'epic',
+        category: '平衡'
+      },
+      {
+        id: 'burned_journal',
+        name: '烧焦的日记本',
+        story: '你在这局里烧掉了所有退路。连续三站选择高风险路线，把人生推向了极端可能。日记本的焦痕是你亲手选择的印记。',
+        trigger: { tagCheck: ['took_risk', 'burned_bridge'], minStep: 3 },
+        buff: { stat: 'freedom', value: 2, flavor: '开局自由+2（你习惯了不确定性）', special: 'high_risk_bonus' },
+        rarity: 'epic',
+        category: '极端'
+      },
+      {
+        id: 'three_routes_badge',
+        name: '跨界者徽章',
+        story: '你没有锁死在一条路线上。这一局你横跨了三条完全不同的路线——如果人生有形状，你的就是一张网，而不是一条线。',
+        trigger: { uniqueRoutesMin: 3, minStep: 3 },
+        buff: { stat: 'freedom', value: 1, flavor: '开局自由+1、意义+1（跨界者永远有退路）', special: 'cross_route_bonus' },
+        rarity: 'epic',
+        category: '跨界'
+      },
+      // —— 传奇级 ——
+      {
+        id: 'master_key',
+        name: '万能钥匙',
+        story: '你在所有六个职业赛道都留下过足迹。这把钥匙开不了任何一扇门——但它提醒你，你从来不需要门。',
+        trigger: { allCareersRequired: true },
+        buff: { stat: 'all', value: 1, flavor: '开局全属性+1（阅历本身就是力量）' },
+        rarity: 'legendary',
+        category: '成就'
+      },
+      {
+        id: 'perfect_game_ring',
+        name: '满分戒指',
+        story: '一局里五项指标全部达到顶级。这不是完美——这是你知道每一种资源都来之不易，却还是把它们全部守住了。',
+        trigger: { statCheck: { money: { min: 9 }, health: { min: 9 }, relationship: { min: 9 }, meaning: { min: 9 }, freedom: { min: 9 } } },
+        buff: { stat: 'all', value: 1, flavor: '开局全属性+1、行动力最大值+4（你已经证明过自己）', special: 'perfect_bonus' },
+        rarity: 'legendary',
+        category: '完美'
+      }
+    ];
+
+    function generateRelics(state) {
+      const candidates = [];
+      const stats = state.stats;
+      const history = state.history || [];
+      const careerId = state.careerId;
+      const uniqueRoutes = new Set(history.map(h => h.routeId));
+
+      RELIC_CATALOG.forEach(relic => {
+        if (relic.trigger.allCareersRequired) {
+          // 需要遍历所有职业——检查 Meta
+          const meta = getMetaProgress();
+          const allCareerIds = ['architecture', 'tech', 'finance', 'education', 'gov', 'freelance'];
+          if (allCareerIds.every(c => meta.completedCareers?.includes?.(c))) {
+            candidates.push(relic);
+          }
+          return;
+        }
+
+        // 检查路线条件
+        if (relic.trigger.anyRouteId) {
+          const hasMatch = relic.trigger.anyRouteId.some(rid => uniqueRoutes.has(rid));
+          if (!hasMatch) return;
+        }
+
+        // 检查最小步数
+        if (relic.trigger.minStep !== undefined && state.currentStep < relic.trigger.minStep) return;
+
+        // 检查路线多样性
+        if (relic.trigger.uniqueRoutesMin && uniqueRoutes.size < relic.trigger.uniqueRoutesMin) return;
+
+        // 检查标记
+        if (relic.trigger.tagCheck) {
+          if (!state.tags) return;
+          const allTagsPresent = relic.trigger.tagCheck.every(tag => state.tags[tag]);
+          if (!allTagsPresent) return;
+        }
+
+        // 检查属性条件
+        if (relic.trigger.statCheck) {
+          for (const [key, condition] of Object.entries(relic.trigger.statCheck)) {
+            const val = stats[key];
+            if (condition.min !== undefined && val < condition.min) return;
+            if (condition.max !== undefined && val > condition.max) return;
+          }
+        }
+
+        // 检查职业完成条件
+        if (relic.trigger.careersRequired) {
+          if (!relic.trigger.careersRequired.includes(careerId)) return;
+        }
+
+        candidates.push(relic);
+      });
+
+      // 按稀有度加权随机选择 1-3 个
+      const rarityWeight = { common: 4, rare: 3, epic: 2, legendary: 1 };
+      const seed = state.seed || 1;
+      const shuffled = candidates.sort(() => seededRandom(seed + candidates.length) - 0.5);
+      const count = Math.min(3, 1 + Math.floor(seededRandom(seed + 77) * 3));
+      const selected = [];
+      const usedCategories = new Set();
+
+      for (const relic of shuffled) {
+        if (selected.length >= count) break;
+        if (usedCategories.has(relic.category)) continue;
+        // Legendary总是加入
+        if (relic.rarity === 'legendary' || Math.random() < rarityWeight[relic.rarity] / 5) {
+          selected.push(relic);
+          usedCategories.add(relic.category);
+        }
+      }
+
+      return selected.length ? selected : [candidates[0]]; // 至少一个
+    }
+
+    function saveRelics(relics) {
+      const meta = getMetaProgress();
+      meta.relics = meta.relics || [];
+      const existingIds = new Set(meta.relics.map(r => r.id));
+      relics.forEach(r => {
+        if (!existingIds.has(r.id)) {
+          meta.relics.push({ id: r.id, earnedAt: new Date().toISOString() });
+          existingIds.add(r.id);
+        }
+      });
+      // 更新完成职业列表
+      meta.completedCareers = meta.completedCareers || [];
+      if (gameState && !meta.completedCareers.includes(gameState.careerId)) {
+        meta.completedCareers.push(gameState.careerId);
+      }
+      saveMetaProgress(meta);
+    }
+
+    function getRelicById(id) {
+      return RELIC_CATALOG.find(r => r.id === id);
+    }
+
+    function applyRelicBuff(relicId) {
+      const relic = getRelicById(relicId);
+      if (!relic) return {};
+      const buff = { money: 0, health: 0, relationship: 0, meaning: 0, freedom: 0 };
+      if (relic.buff.stat === 'all') {
+        Object.keys(buff).forEach(k => { buff[k] = relic.buff.value; });
+      } else if (relic.buff.stat && buff.hasOwnProperty(relic.buff.stat)) {
+        buff[relic.buff.stat] = relic.buff.value;
+      }
+      return buff;
+    }
+
+    // ============================================================
+    // 分支标记系统
+    // ============================================================
+    const GAME_TAGS = {
+      took_risk: { label: '冒过险', desc: '选择了高风险路线或黑天鹅选项' },
+      burned_bridge: { label: '断了退路', desc: '从高薪/稳定路线跳到了低薪/不稳定路线' },
+      stayed_loyal: { label: '深耕者', desc: '连续3站选择同一路线' },
+      side_hustle: { label: '斜杠', desc: '在副业路线上有过选择' },
+      health_aware: { label: '健康意识', desc: '健康值从未低于5' },
+      money_focused: { label: '金钱导向', desc: '金钱值达到9+' },
+      relationship_rich: { label: '关系丰厚', desc: '关系值达到8+' },
+      meaning_driven: { label: '意义驱动', desc: '意义值达到8+' }
+    };
+
+    function setGameTag(tagId) {
+      if (!gameState || !GAME_TAGS[tagId]) return;
+      gameState.tags = gameState.tags || {};
+      gameState.tags[tagId] = true;
+    }
+
+    function hasGameTag(tagId) {
+      return !!(gameState?.tags?.[tagId]);
+    }
+
+    function updateGameTagsAfterChoice(option, routeIndex) {
+      if (!gameState) return;
+      const route = option.route;
+      const node = option.node;
+
+      // 冒过险：选择了创新/高风险路线（路线B通常是高风险）
+      if (route.id === 'route_b' || routeIndex === 1) setGameTag('took_risk');
+
+      // 断了退路：从高薪路线跳到了低薪路线
+      if (gameState.history.length >= 1) {
+        const lastRoute = gameState.history[gameState.history.length - 1];
+        const lastIncome = lastRoute.node?.income ?? 0;
+        const thisIncome = node.income ?? 0;
+        if (lastIncome > 10000 && thisIncome < 5000) setGameTag('burned_bridge');
+      }
+
+      // 深耕者：连续3站同一路线
+      const lastThreeChoices = gameState.history.slice(-2).concat([{ routeId: route.id }]);
+      if (lastThreeChoices.length >= 3 && lastThreeChoices.every(h => h.routeId === route.id)) {
+        setGameTag('stayed_loyal');
+      }
+
+      // 健康意识：健康值不低于5
+      if (gameState.stats.health >= 5) setGameTag('health_aware');
+
+      // 金钱导向：金钱值9+
+      if (gameState.stats.money >= 9) setGameTag('money_focused');
+
+      // 关系丰厚：关系值8+
+      if (gameState.stats.relationship >= 8) setGameTag('relationship_rich');
+
+      // 意义驱动：意义值8+
+      if (gameState.stats.meaning >= 8) setGameTag('meaning_driven');
+    }
+
+    // 标记驱动的条件文本
+    function getTagAwareFlavor(node, route, stepIndex) {
+      if (!gameState?.tags) return '';
+      const tags = gameState.tags;
+      let flavor = '';
+
+      if (tags.burned_bridge && stepIndex >= 2) {
+        flavor += '你断过的退路让你比同行者更清醒。';
+      }
+      if (tags.stayed_loyal && stepIndex >= 2) {
+        flavor += '深耕已经变成一种惯性，代价和回报都在累积。';
+      }
+      if (tags.took_risk && tags.health_aware) {
+        flavor += '你在冒险和自保之间找到了微妙的平衡。';
+      }
+      if (tags.money_focused && tags.meaning_driven) {
+        flavor += '钱和意义同时在线——这是少数人才能到达的状态。';
+      }
+      if (tags.health_aware && stepIndex >= 3) {
+        flavor += '你对身体的投资是这局最划算的一笔。';
+      }
+      return flavor;
+    }
+
+    function getEventResponseLabel(responseId, tag) {
+      const copySet = RESPONSE_COPY_BY_TAG[tag];
+      if (!copySet) return null;
+      const idx = EVENT_RESPONSES.findIndex(r => r.id === responseId);
+      return copySet[idx] || null;
+    }
+
+    function contextualizeDescription(description, stats, history, route) {
+      let additions = [];
+      if (stats.health <= 3) additions.push('你感到身体在发出警告。');
+      if (stats.health <= 2) additions.push('头痛、失眠、免疫力下降，身体正在抗议。');
+      const sameRouteCount = history.filter(h => h.routeId === route.id).length;
+      if (sameRouteCount >= 2) additions.push('惯性已经形成，改道的成本在上升。');
+      if (sameRouteCount >= 3) additions.push('你已经在这条路上走得太远，回头很难。');
+      if (stats.money >= 8) additions.push('经济宽裕让你有了更多选择空间。');
+      if (stats.money <= 2) additions.push('存款在见底，每个选择都带有一份焦虑。');
+      if (stats.relationship <= 2) additions.push('身边能理解你的人越来越少。');
+      if (stats.relationship >= 8) additions.push('你的关系网络是此刻最大的资产。');
+      if (stats.meaning >= 8) additions.push('你对自己在做什么毫不怀疑。');
+      if (stats.meaning <= 2) additions.push('你开始怀疑这一切是否值得。');
+      if (stats.freedom >= 8) additions.push('你的时间完全属于自己。');
+      if (stats.freedom <= 2) additions.push('日程表被塞满，你没有喘息的空间。');
+      if (additions.length === 0) return description;
+      const count = Math.min(2, additions.length);
+      const seed = (gameState?.seed || 1) + (route.id || '').length * 7;
+      const picked = [];
+      let attempts = 0;
+      while (picked.length < count && attempts < 20) {
+        const idx = Math.floor(seededRandom(seed + attempts * 31) * additions.length);
+        if (!picked.includes(idx)) picked.push(idx);
+        attempts++;
+      }
+      return description + ' ' + picked.map(i => additions[i]).join('');
+    }
+
+    const DILEMMA_TEMPLATES = [
+      {
+        title: node => `接下「${node.title}」，赌这一轮能翻身`,
+        temptation: '短期收益明确，能迅速给自己一个交代。',
+        cost: '你要拿身体和关系去换速度。',
+        pressure: '高压押注'
+      },
+      {
+        title: node => `把「${node.title}」做成作品，而不是任务`,
+        temptation: '这条路会慢一点，但更可能留下可复利的东西。',
+        cost: '现金流不一定马上好看，外界也未必理解。',
+        pressure: '意义优先'
+      },
+      {
+        title: node => `暂时低头，先吃下「${node.title}」的确定性`,
+        temptation: '稳住收入和身份，先别让局面失控。',
+        cost: '你可能会越来越难承认自己还想换路。',
+        pressure: '安全交换'
+      },
+      {
+        title: node => `反向操作：借「${node.title}」改写人际牌局`,
+        temptation: '这不是最省力的选项，但可能打开新关系。',
+        cost: '你需要承担误解、拒绝和临时改道的摩擦。',
+        pressure: '关系博弈'
+      },
+      {
+        title: node => `放弃最优解，选「${node.title}」里最像自己的部分`,
+        temptation: '你保住了主体感，不再只是被路径推着走。',
+        cost: '结果会更不稳定，也更难向别人解释。',
+        pressure: '自我冲突'
+      }
+    ];
+
+    function syncWindowState() {
+      window.gameState = gameState;
+      window.selectedCareerId = selectedCareerId;
+    }
+
+    function safeStorageGet(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        console.warn('读取本地存档失败', e);
+        return null;
+      }
+    }
+
+    function safeStorageSet(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        console.warn('写入本地存档失败', e);
+        return false;
+      }
+    }
+
+    function safeStorageRemove(key) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn('删除本地存档失败', e);
+      }
+    }
+
+    // ============================================================
+    // 内置 BGM / 音效
+    // ============================================================
+    const soundState = {
+      enabled: true,
+      unlocked: false,
+      musicPlaying: false,
+      lastSfx: '',
+      hitCount: 0,
+      beat: 0
+    };
+    let audioCtx = null;
+    let masterGain = null;
+    let musicTimer = null;
+    window.soundState = soundState;
+
+    function getAudioContext() {
+      if (audioCtx) return audioCtx;
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) return null;
+      audioCtx = new AudioCtor();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.42;
+      masterGain.connect(audioCtx.destination);
+      return audioCtx;
+    }
+
+    function unlockAudio() {
+      soundState.unlocked = true;
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(e => console.warn('音频解锁失败', e));
+      }
+      if (soundState.enabled) startMusicLoop();
+      updateSoundButton();
+      return true;
+    }
+
+    function updateSoundButton() {
+      const btn = document.getElementById('sound-toggle');
+      if (!btn) return;
+      btn.classList.toggle('active', soundState.enabled);
+      btn.textContent = soundState.enabled ? '♪' : '×';
+      btn.setAttribute('aria-label', soundState.enabled ? '关闭声音' : '开启声音');
+    }
+
+    function stopMusicLoop() {
+      if (musicTimer) clearInterval(musicTimer);
+      musicTimer = null;
+      soundState.musicPlaying = false;
+    }
+
+    function startMusicLoop() {
+      if (!soundState.enabled || musicTimer) return;
+      soundState.musicPlaying = true;
+      playMusicBeat();
+      musicTimer = setInterval(playMusicBeat, 520);
+    }
+
+    function playTone(freq, duration = 0.12, type = 'sine', gainValue = 0.04, delay = 0) {
+      const ctx = getAudioContext();
+      if (!ctx || !soundState.enabled || !masterGain) return;
+      const start = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(start);
+      osc.stop(start + duration + 0.02);
+    }
+
+    function playNoise(duration = 0.12, gainValue = 0.08) {
+      const ctx = getAudioContext();
+      if (!ctx || !soundState.enabled || !masterGain) return;
+      const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * duration)), ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      const src = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      src.buffer = buffer;
+      gain.gain.value = gainValue;
+      src.connect(gain);
+      gain.connect(masterGain);
+      src.start();
+      src.stop(ctx.currentTime + duration);
+    }
+
+    function playMusicBeat() {
+      if (!soundState.enabled) return;
+      const step = soundState.beat % 8;
+      const bass = [82.41, 82.41, 98, 110, 82.41, 123.47, 110, 98][step];
+      if (step % 2 === 0) playTone(bass, 0.28, 'triangle', 0.026);
+      playTone([220, 246.94, 277.18, 329.63][step % 4], 0.09, 'sine', 0.012, 0.08);
+      if (step === 0 || step === 4) playTone(55, 0.08, 'sawtooth', 0.032);
+      soundState.beat += 1;
+    }
+
+    async function toggleAudio() {
+      soundState.enabled = !soundState.enabled;
+      if (soundState.enabled) {
+        await unlockAudio();
+        playSfx('tap', 0.7);
+      } else {
+        stopMusicLoop();
+      }
+      updateSoundButton();
+    }
+
+    function playSfx(name, intensity = 1) {
+      soundState.lastSfx = name;
+      soundState.hitCount += 1;
+      if (!soundState.unlocked) unlockAudio();
+      if (!soundState.enabled) return;
+      if (name === 'impact') {
+        playTone(72, 0.16, 'sawtooth', 0.09 * intensity);
+        playTone(148, 0.12, 'square', 0.035 * intensity, 0.025);
+        playTone(294, 0.08, 'triangle', 0.025 * intensity, 0.06);
+        playNoise(0.16, 0.06 * intensity);
+      } else if (name === 'start') {
+        playTone(196, 0.08, 'triangle', 0.04 * intensity);
+        playTone(246.94, 0.1, 'triangle', 0.04 * intensity, 0.08);
+        playTone(329.63, 0.16, 'triangle', 0.035 * intensity, 0.16);
+      } else {
+        playTone(520, 0.045, 'sine', 0.025 * intensity);
+        playTone(760, 0.05, 'triangle', 0.018 * intensity, 0.035);
+      }
+    }
+
+    // ============================================================
+    // Canvas 城市背景
+    // ============================================================
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
+    let buildings = [];
+    let windows = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      initStars();
+      initWindows();
+    }
+
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < 80; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height * 0.5,
+          size: Math.random() * 1.5 + 0.3,
+          twinkle: Math.random() * Math.PI * 2,
+          speed: Math.random() * 0.02 + 0.005
+        });
+      }
+    }
+
+    function initWindows() {
+      buildings = [];
+      windows = [];
+      const buildingCount = Math.floor(canvas.width / 40);
+      for (let b = 0; b < buildingCount; b++) {
+        const bx = b * 40 + Math.random() * 15;
+        const by = canvas.height - Math.random() * canvas.height * 0.35 - 20;
+        const bw = 25 + Math.random() * 15;
+        const bh = canvas.height - by;
+        buildings.push({ x: bx, y: by, w: bw, h: bh });
+        const floors = Math.floor(bh / 18);
+        const cols = Math.floor(bw / 10);
+        for (let f = 1; f < floors - 1; f++) {
+          for (let c = 0; c < cols; c++) {
+            if (Math.random() > 0.4) {
+              windows.push({
+                x: bx + c * 10 + 2,
+                y: by + f * 18 + 3,
+                w: 5, h: 8,
+                on: Math.random() > 0.2,
+                warmth: Math.random() > 0.5 ? 'warm' : 'cool',
+                flicker: Math.random() * Math.PI * 2,
+                fSpeed: Math.random() * 0.03 + 0.01
+              });
+            }
+          }
+        }
+      }
+    }
+
+    function drawBg() {
+      ctx.fillStyle = '#0e0e0b';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 星星
+      stars.forEach(s => {
+        s.twinkle += s.speed;
+        const opacity = 0.3 + Math.sin(s.twinkle) * 0.3;
+        ctx.fillStyle = `rgba(218, 214, 202, ${opacity * 0.55})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 城市轮廓
+      ctx.fillStyle = '#060a10';
+      buildings.forEach(b => {
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+      });
+
+      // 窗户灯光
+      const time = Date.now() * 0.001;
+      windows.forEach(w => {
+        w.flicker += w.fSpeed;
+        const flickerOpacity = w.on ? (0.5 + Math.sin(w.flicker) * 0.2) : 0;
+        if (flickerOpacity > 0.05) {
+          ctx.fillStyle = w.warmth === 'warm'
+            ? `rgba(230, 180, 100, ${flickerOpacity})`
+            : `rgba(165, 168, 160, ${flickerOpacity * 0.45})`;
+          ctx.fillRect(w.x, w.y, w.w, w.h);
+        }
+      });
+
+      requestAnimationFrame(drawBg);
+    }
+
+    // ============================================================
+    // 打字机
+    // ============================================================
+    function typeWrite(element, texts, idx = 0) {
+      if (idx >= texts.length) {
+        document.getElementById('intro-btn-wrap').style.opacity = 1;
+        return;
+      }
+      const text = texts[idx];
+      let i = 0;
+      element.textContent = '';
+      const interval = setInterval(() => {
+        element.textContent += text[i];
+        i++;
+        if (i >= text.length) {
+          clearInterval(interval);
+          setTimeout(() => {
+            if (idx < texts.length - 1) {
+              element.textContent = '';
+              typeWrite(element, texts, idx + 1);
+            } else {
+              document.getElementById('intro-btn-wrap').style.opacity = 1;
+            }
+          }, 1200);
+        }
+      }, 55);
+    }
+
+    // ============================================================
+    // 场景切换
+    // ============================================================
+    function showScene(n) {
+      unlockAudio();
+      if (currentScene !== n) playSfx('tap', 0.45);
+      document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+      document.getElementById(['scene-intro', 'scene-tutorial', 'scene-select', 'scene-main'][n]).classList.add('active');
+      currentScene = n;
+      if (n === 2) renderMetaPanel();
+    }
+
+    function renderMetaPanel() {
+      const panel = document.getElementById('meta-panel');
+      if (!panel) return;
+      const meta = getMetaProgress();
+      if (meta.totalGames === 0) {
+        panel.innerHTML = '<p style="color:var(--text-dim);font-size:0.72rem;">每一局选择都会积累人生阅历，解锁新的可能性</p>';
+        return;
+      }
+      const lvl = computeLevel(meta.xp);
+      const next = getNextLevel(meta.xp);
+      const pct = next ? Math.round((meta.xp - lvl.xp) / (next.xp - lvl.xp) * 100) : 100;
+      const features = meta.unlockedFeatures.length ? meta.unlockedFeatures.map(f => {
+        const info = META_LEVELS.find(l => l.reward === f);
+        return info ? info.desc : f;
+      }) : [];
+      panel.innerHTML = `
+        <div class="meta-level-bar" style="text-align:left;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span class="meta-level-label">人生阅历 Lv.${lvl.level} ${lvl.label}</span>
+            <span class="meta-xp-text">${meta.xp}${next ? '/' + next.xp : ''} XP · ${meta.totalGames}局</span>
+          </div>
+          <div class="meta-xp-track"><div class="meta-xp-fill" style="width:${pct}%"></div></div>
+          ${features.length ? '<div style="color:#44d07b;font-size:0.68rem;margin-top:4px;">已解锁：' + features.join('、') + '</div>' : ''}
+          ${next && next.reward ? '<div style="color:var(--text-dim);font-size:0.65rem;margin-top:2px;">下一级解锁：' + next.desc + '</div>' : ''}
+        </div>
+      `;
+    }
+
+    // ============================================================
+    // 试玩关卡
+    // ============================================================
+    function tutorialChoice(choice) {
+      playSfx('tap', 0.65);
+      const resultDiv = document.getElementById('tut-result');
+      const choicesDiv = document.getElementById('tut-choices');
+      choicesDiv.style.display = 'none';
+      resultDiv.style.display = 'block';
+
+      const workResult = `
+        <div class="timeline-node">
+          <div class="timeline-dot">3天</div>
+          <div class="timeline-body">
+            <h4>方案提前交了</h4>
+            <p>领导在群里表扬了你。但朋友婚礼的请柬还压在抽屉里。</p>
+          </div>
+        </div>
+        <div class="timeline-node">
+          <div class="timeline-dot">1月</div>
+          <div class="timeline-body">
+            <h4>晋升名单有你</h4>
+            <p>工资涨了30%。但发现已经三个月没和朋友聚餐了。</p>
+          </div>
+        </div>
+        <div class="hint-box">
+          <p>这就是平行人生的规则：每个选择都有短期收益和长期代价。没有完美的路，只有不同的风景。</p>
+        </div>
+        <div style="text-align:center; margin-top:20px;">
+          <button class="btn btn-primary" onclick="showScene(2)">理解了吗？开始你的真实人生 →</button>
+        </div>
+      `;
+
+      const partyResult = `
+        <div class="timeline-node">
+          <div class="timeline-dot">3天</div>
+          <div class="timeline-body">
+            <h4>认识了一个做播客的人</h4>
+            <p>聊了三小时，发现你们有很多共同想法。方案周一才交，但也没事。</p>
+          </div>
+        </div>
+        <div class="timeline-node">
+          <div class="timeline-dot">1月</div>
+          <div class="timeline-body">
+            <h4>开始合作一个小项目</h4>
+            <p>副业有了新方向。虽然主业进展慢了，但生活多了可能性。</p>
+          </div>
+        </div>
+        <div class="hint-box">
+          <p>这就是平行人生的规则：意想不到的连接可能打开新的大门。蝴蝶效应是真实的。</p>
+        </div>
+        <div style="text-align:center; margin-top:20px;">
+          <button class="btn btn-primary" onclick="showScene(2)">理解了吗？开始你的真实人生 →</button>
+        </div>
+      `;
+
+      resultDiv.innerHTML = choice === 'work' ? workResult : partyResult;
+    }
+
+    // ============================================================
+    // 职业选择
+    // ============================================================
+    function initCareerSelect() {
+      const grid = document.getElementById('career-grid');
+      grid.innerHTML = CAREERS.map(c => `
+        <div class="career-card" data-id="${c.id}" onclick="selectCareer('${c.id}')">
+          <div class="c-icon">${c.icon}</div>
+          <div class="c-name">${c.name}</div>
+        </div>
+      `).join('');
+
+      // 默认人物
+      updateResumeButton();
+      selectCareer(CAREERS[0].id);
+    }
+
+    function selectCareer(id) {
+      selectedCareerId = id;
+      syncWindowState();
+      document.querySelectorAll('.career-card').forEach(c => c.classList.remove('selected'));
+      document.querySelector(`.career-card[data-id="${id}"]`).classList.add('selected');
+      playSfx('tap', 0.35);
+
+      const btn = document.getElementById('btn-generate');
+      btn.style.opacity = 1;
+      btn.style.pointerEvents = 'auto';
+    }
+
+    async function generateLife() {
+      if (!selectedCareerId) {
+        selectCareer(CAREERS[0].id);
+      }
+
+      const btn = document.getElementById('btn-generate');
+      const previousText = btn.textContent;
+      btn.textContent = '生成中...';
+      btn.style.pointerEvents = 'none';
+
+      try {
+        await unlockAudio();
+        playSfx('start', 0.9);
+        await loadData(selectedCareerId);
+        startNewGame(selectedCareerId);
+        showScene(3);
+        renderMain();
+      } catch (e) {
+        console.error('开局失败', e);
+        document.getElementById('share-feedback').textContent = '开局失败，刷新后再试一次';
+      } finally {
+        btn.textContent = previousText;
+        btn.style.pointerEvents = 'auto';
+      }
+    }
+
+    function backToSelect() {
+      showScene(2);
+      updateResumeButton();
+    }
+
+    // ============================================================
+    // 数据加载
+    // ============================================================
+    async function loadData(careerId) {
+      let data;
+      if (careerId === 'architecture') {
+        try {
+          const res = await fetch('data.json');
+          data = await res.json();
+        } catch (e) {
+          console.warn('加载 data.json 失败，使用内置数据');
+          data = BUILT_IN_DATA[careerId];
+        }
+      }
+      if (!data) data = BUILT_IN_DATA[careerId] || BUILT_IN_DATA.tech;
+      routesData = data.routes.map(expandRouteNodes);
+      dimensionLabels = data.dimensions.balance_labels;
+    }
+
+    // ============================================================
+    // 游戏主循环
+    // ============================================================
+    function startNewGame(careerId) {
+      const career = CAREERS.find(c => c.id === careerId) || CAREERS[0];
+      const bonus = getStartStatsBonus();
+      // 应用圣遗物buff
+      const relicIds = window._selectedRelicIds || [];
+      let relicBuff = { money: 0, health: 0, relationship: 0, meaning: 0, freedom: 0 };
+      const activeRelics = [];
+      relicIds.forEach(rid => {
+        const buff = applyRelicBuff(rid);
+        Object.keys(buff).forEach(k => { relicBuff[k] += buff[k]; });
+        activeRelics.push(rid);
+      });
+
+      const baseStats = {};
+      Object.keys(BASE_STATS).forEach(key => {
+        baseStats[key] = clampStat(BASE_STATS[key] + (bonus[key] || 0) + (relicBuff[key] || 0));
+      });
+
+      // 遗物特殊效果
+      const hasResolveBoost = relicIds.some(rid => {
+        const r = getRelicById(rid);
+        return r?.buff?.special === 'resolve_boost' || r?.buff?.special === 'perfect_bonus';
+      });
+
+      gameState = {
+        careerId,
+        careerName: career.name,
+        seed: makeSeed(),
+        currentStep: 0,
+        activeRouteId: null,
+        stats: baseStats,
+        activeRelics,
+        tags: {},
+        duel: createInitialDuel(hasResolveBoost),
+        eventResponses: {},
+        history: [],
+        ended: false,
+        ending: null,
+        startedAt: new Date().toISOString()
+      };
+      window._selectedRelicIds = null;
+      syncWindowState();
+      saveGame();
+    }
+
+    function createInitialDuel(resolveBoost = false) {
+      return {
+        resolve: resolveBoost ? 28 : 24,
+        maxResolve: resolveBoost ? 28 : 24,
+        pressure: 28,
+        maxPressure: 28,
+        combo: 0,
+        lastRound: null
+      };
+    }
+
+    function ensureDuelState() {
+      if (!gameState) return null;
+      const base = createInitialDuel();
+      gameState.duel = {
+        ...base,
+        ...(gameState.duel || {})
+      };
+      gameState.duel.resolve = clampValue(gameState.duel.resolve, 0, gameState.duel.maxResolve || base.maxResolve);
+      gameState.duel.pressure = clampValue(gameState.duel.pressure, 0, gameState.duel.maxPressure || base.maxPressure);
+      return gameState.duel;
+    }
+
+    function clampValue(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function getMaxSteps() {
+      return Math.max(...routesData.map(route => route.nodes.length));
+    }
+
+    function clampStat(value) {
+      return Math.max(0, Math.min(10, value));
+    }
+
+    function clampDelta(value) {
+      return Math.max(-4, Math.min(4, value));
+    }
+
+    function signed(value) {
+      return value > 0 ? `+${value}` : String(value);
+    }
+
+    function makeSeed() {
+      return Math.floor(Math.random() * 1000000000);
+    }
+
+    function seededRandom(seed) {
+      let t = seed + 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+
+    function stepRandom(stepIndex, salt = 0) {
+      const base = gameState?.seed || 1;
+      const routeOffset = gameState?.activeRouteId
+        ? gameState.activeRouteId.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+        : 0;
+      return seededRandom(base + stepIndex * 9973 + salt * 7919 + routeOffset);
+    }
+
+    function pickBySeed(items, stepIndex, salt = 0) {
+      return items[Math.floor(stepRandom(stepIndex, salt) * items.length) % items.length];
+    }
+
+    function getEventResponseMeta(responseId) {
+      return EVENT_RESPONSES.find(item => item.id === responseId) || EVENT_RESPONSES[0];
+    }
+
+    function getSelectedEventResponse(stepIndex = gameState?.currentStep || 0) {
+      const fallback = getEventResponseMeta(DEFAULT_EVENT_RESPONSE_ID);
+      if (!gameState) return fallback;
+      gameState.eventResponses = gameState.eventResponses || {};
+      const key = String(stepIndex);
+      const stored = getEventResponseMeta(gameState.eventResponses[key] || DEFAULT_EVENT_RESPONSE_ID);
+      gameState.eventResponses[key] = stored.id;
+      return stored;
+    }
+
+    function applyEventResponseImpact(baseImpact, response) {
+      const impact = { ...baseImpact };
+      Object.keys(STAT_META).forEach(key => {
+        let value = impact[key] || 0;
+        if (response.mitigate && value < 0) {
+          value = Math.min(0, value + response.mitigate);
+        }
+        impact[key] = clampDelta(value + (response.impact?.[key] || 0));
+      });
+      return impact;
+    }
+
+    function getStepEvent(stepIndex = gameState?.currentStep || 0) {
+      const event = pickBySeed(RANDOM_EVENTS, stepIndex, 31);
+      const response = getSelectedEventResponse(stepIndex);
+      return {
+        title: event.title,
+        body: event.body,
+        tag: event.tag,
+        baseImpact: { ...event.impact },
+        impact: applyEventResponseImpact(event.impact, response),
+        response: {
+          id: response.id,
+          label: response.label,
+          hint: response.hint,
+          combat: { ...response.combat }
+        }
+      };
+    }
+
+    function getPressureSignal(event = getStepEvent()) {
+      const tag = event?.tag || '';
+      if (tag.includes('健康')) return { name: '身体压力', message: '行动力正在被健康问题消耗', color: '#ff6b6b' };
+      if (tag.includes('关系') || tag.includes('家庭') || tag.includes('人情')) return { name: '关系压力', message: '社交成本会影响这轮选择', color: '#d896ff' };
+      if (tag.includes('规则') || tag.includes('平台')) return { name: '规则压力', message: '确定性下降，需要重新判断', color: '#d7b46a' };
+      if (tag.includes('时间')) return { name: '时间压力', message: '窗口期变短，拖延会吃亏', color: '#e3b341' };
+      if (tag.includes('贵人') || tag.includes('入口')) return { name: '机会窗口', message: '入口打开，但需要付出行动成本', color: '#44d07b' };
+      return { name: '现实阻力', message: '局势正在挤压你的行动空间', color: '#e3b341' };
+    }
+
+    function mergeImpact(base, extra) {
+      const merged = { ...base };
+      Object.keys(STAT_META).forEach(key => {
+        merged[key] = clampDelta((merged[key] || 0) + (extra?.[key] || 0));
+      });
+      return merged;
+    }
+
+    function deriveChoiceImpact(route, node, stepIndex) {
+      const sheet = route.balance_sheet || {};
+      const income = node.income;
+      const incomeScore = income === null || income === undefined
+        ? (sheet.money ?? 5)
+        : Math.max(0, Math.min(10, 5 + income / 12000));
+      const emotionScore = node.emotion ?? ((sheet.meaning ?? 5) + (sheet.health ?? 5)) / 2;
+      const healthScore = node.health ?? sheet.health ?? 5;
+
+      const impact = {
+        money: clampDelta(Math.round(incomeScore - 5)),
+        health: clampDelta(Math.round(healthScore - 5)),
+        relationship: clampDelta(Math.round((sheet.relationship ?? 5) - 5)),
+        meaning: clampDelta(Math.round(((sheet.meaning ?? 5) + emotionScore) / 2 - 5)),
+        freedom: clampDelta(Math.round((sheet.time_freedom ?? 5) - 5))
+      };
+
+      if (stepIndex >= 2 && route.id !== gameState?.activeRouteId) {
+        impact.relationship = clampDelta(impact.relationship - 1);
+      }
+      if (node.title.includes('？')) {
+        impact.meaning = clampDelta(impact.meaning + 1);
+        impact.freedom = clampDelta(impact.freedom + 1);
+      }
+
+      return impact;
+    }
+
+    function buildDilemma(route, node, stepIndex, routeIndex) {
+      const templateIndex = Math.floor(stepRandom(stepIndex, routeIndex + 7) * DILEMMA_TEMPLATES.length) % DILEMMA_TEMPLATES.length;
+      const template = DILEMMA_TEMPLATES[(templateIndex + routeIndex) % DILEMMA_TEMPLATES.length];
+      const pressure = [];
+      const income = node.income;
+
+      if (income !== null && income !== undefined && income > 15000) pressure.push('钱会变多');
+      if ((node.health ?? 5) <= 4) pressure.push('身体透支');
+      if ((route.balance_sheet?.relationship ?? 5) <= 4) pressure.push('关系变薄');
+      if ((route.balance_sheet?.time_freedom ?? 5) >= 7) pressure.push('自由更高');
+      if ((route.balance_sheet?.meaning ?? 5) >= 7) pressure.push('意义感强');
+      if (!pressure.length) pressure.push(template.pressure);
+
+      return {
+        title: template.title(node, route),
+        temptation: template.temptation,
+        cost: template.cost,
+        pressure: [...new Set([template.pressure, ...pressure])].slice(0, 3)
+      };
+    }
+
+    function getChoiceOptions() {
+      if (!gameState || gameState.ended) return [];
+      const stepIndex = gameState.currentStep;
+      const event = getStepEvent(stepIndex);
+      return routesData
+        .map((route, routeIndex) => {
+          const node = route.nodes[Math.min(stepIndex, route.nodes.length - 1)];
+          const baseImpact = deriveChoiceImpact(route, node, stepIndex);
+          const impact = mergeImpact(baseImpact, event.impact);
+          const dilemma = buildDilemma(route, node, stepIndex, routeIndex);
+          return {
+            route,
+            node,
+            event,
+            baseImpact,
+            impact,
+            dilemma,
+            combat: deriveCombatStats(impact, event, route)
+          };
+        })
+        .sort((a, b) => {
+          if (a.route.id === gameState.activeRouteId) return -1;
+          if (b.route.id === gameState.activeRouteId) return 1;
+          return 0;
+        });
+    }
+
+    function deriveCombatStats(impact, event, route) {
+      const positive = Object.values(impact).filter(value => value > 0).reduce((sum, value) => sum + value, 0);
+      const negative = Object.values(impact).filter(value => value < 0).reduce((sum, value) => sum + Math.abs(value), 0);
+      const meaningBoost = Math.max(0, impact.meaning || 0);
+      const freedomBoost = Math.max(0, impact.freedom || 0);
+      const responseCombat = event?.response?.combat || {};
+      const guard = Math.max(0, Math.max(impact.health || 0, 0) + Math.max(impact.relationship || 0, 0) + (responseCombat.guard || 0));
+      const eventHeat = Object.values(event?.impact || {}).filter(value => value < 0).length;
+      const strike = clampValue(4 + positive + meaningBoost + Math.floor(freedomBoost / 2) + (responseCombat.strike || 0), 3, 15);
+      const recoil = clampValue(2 + negative + eventHeat - Math.floor(guard / 2) + (responseCombat.recoil || 0), 0, 12);
+      const tempo = route?.id === gameState?.activeRouteId ? 1 : 0;
+      return {
+        strike: strike + tempo,
+        guard,
+        recoil
+      };
+    }
+
+    function chooseGameOption(index) {
+      const options = getChoiceOptions();
+      const option = options[index];
+      if (!gameState || !option) return;
+      ensureDuelState();
+
+      const statsBefore = { ...gameState.stats };
+      const duelBefore = { ...gameState.duel };
+      Object.entries(option.impact).forEach(([key, delta]) => {
+        gameState.stats[key] = clampStat(gameState.stats[key] + delta);
+      });
+      const duelRound = resolveDuelRound(option, duelBefore);
+
+      gameState.history.push({
+        step: gameState.currentStep,
+        timeLabel: option.node.time_label || GAME_STEPS[gameState.currentStep] || '',
+        routeId: option.route.id,
+        routeLabel: option.route.short_label,
+        routeColor: option.route.color,
+        title: option.dilemma.title,
+        nodeTitle: option.node.title,
+        description: option.node.description,
+        dilemma: option.dilemma,
+        event: option.event,
+        keyEvent: option.node.key_event,
+        impact: option.impact,
+        baseImpact: option.baseImpact,
+        duel: duelRound,
+        statsBefore,
+        statsAfter: { ...gameState.stats }
+      });
+
+      gameState.activeRouteId = option.route.id;
+      updateGameTagsAfterChoice(option, index);
+      gameState.currentStep += 1;
+
+      if (gameState.currentStep >= getMaxSteps()) {
+        gameState.ended = true;
+        gameState.ending = judgeEnding(gameState);
+      }
+
+      syncWindowState();
+      saveGame();
+      renderMain();
+      triggerImpactFeedback(duelRound);
+      playSfx('impact', Math.min(1.35, 0.85 + duelRound.strike / 18));
+    }
+
+    function resolveDuelRound(option, duelBefore) {
+      const combat = option.combat || deriveCombatStats(option.impact, option.event, option.route);
+      const pressureAfter = clampValue(duelBefore.pressure - combat.strike, 0, duelBefore.maxPressure);
+      const resolveLoss = Math.max(0, combat.recoil - combat.guard);
+      const resolveAfter = clampValue(duelBefore.resolve - resolveLoss, 0, duelBefore.maxResolve);
+      const breakthrough = pressureAfter === 0;
+      const duelRound = {
+        strike: combat.strike,
+        guard: combat.guard,
+        recoil: combat.recoil,
+        resolveLoss,
+        pressureBefore: duelBefore.pressure,
+        pressureAfter,
+        resolveBefore: duelBefore.resolve,
+        resolveAfter,
+        breakthrough,
+        pressureSignal: getPressureSignal(option.event)
+      };
+      gameState.duel.pressure = pressureAfter;
+      gameState.duel.resolve = resolveAfter;
+      gameState.duel.combo = breakthrough ? (gameState.duel.combo || 0) + 1 : 0;
+      gameState.duel.lastRound = duelRound;
+      return duelRound;
+    }
+
+    function judgeEnding(state) {
+      const stats = state.stats;
+      const score = Object.values(stats).reduce((sum, value) => sum + value, 0);
+      const last = state.history[state.history.length - 1];
+      const career = CAREERS.find(c => c.id === state.careerId);
+      let ending;
+
+      // 先检查极端负面状态
+      if (stats.health <= 2) {
+        ending = {
+          title: '透支型人生',
+          tone: '你拿到了一些结果，但身体先替你按下暂停。下一局要把健康当作硬资源，而不是背景值。',
+          score
+        };
+      // 高钱低意义：暴富但空虚
+      } else if (stats.money >= 9 && stats.meaning <= 4) {
+        ending = {
+          title: '暴富型人生',
+          tone: '你的经济账户很充裕，但意义账户在透支。钱能买到自由，买不到答案。',
+          score
+        };
+      // 高意义低钱：苦行
+      } else if (stats.meaning >= 8 && stats.money <= 4) {
+        ending = {
+          title: '苦行型人生',
+          tone: `你在${career?.name || '这条路'}里找到了深信不疑的东西，但世俗回报严重滞后。这条路孤独但清醒。`,
+          score
+        };
+      // 高钱高意义：杠杆
+      } else if (stats.money >= 8 && stats.meaning >= 7) {
+        ending = {
+          title: '高杠杆人生',
+          tone: '你把收入和意义感同时推高了。代价是每次选择都更像一次押注，但你确实换到了主动权。',
+          score
+        };
+      // 高自由低关系：孤岛
+      } else if (stats.freedom >= 8 && stats.relationship <= 3) {
+        ending = {
+          title: '自由孤岛',
+          tone: '你获得了很高的行动自由，但关系网络被拉薄。自由是真的，孤独也是真的。',
+          score
+        };
+      // 高关系高健康：稳态
+      } else if (stats.relationship >= 7 && stats.health >= 6) {
+        ending = {
+          title: '稳态人生',
+          tone: '你没有把任何一个指标打到极限，但保住了关系和身体。它不刺激，却能长期运行。',
+          score
+        };
+      // 所有指标都在中上区间：平衡
+      } else if (stats.money >= 5 && stats.money <= 7 && stats.health >= 5 && stats.health <= 7 &&
+                 stats.relationship >= 5 && stats.relationship <= 7 && stats.meaning >= 5 && stats.meaning <= 7) {
+        ending = {
+          title: '平衡型人生',
+          tone: '没有一项指标爆表，但也没有明显的短板。你不是最突出的那个，却是最抗波动的一个。',
+          score
+        };
+      // 高意义兜底
+      } else if (stats.meaning >= 8) {
+        ending = {
+          title: '意义驱动人生',
+          tone: `你在${career?.name || '这条路'}里不断选择让自己相信的事。结果未必最富，但精神账户是正的。`,
+          score
+        };
+      } else {
+        ending = {
+          title: last ? `${last.routeLabel}结局` : '开放式人生',
+          tone: '这局人生没有明显的胜负。它更像一张账单：每个选择都留下了收益、代价和下一次重开的线索。',
+          score
+        };
+      }
+
+      ending.parallel = chooseRealLifeParallel(state, ending);
+      return ending;
+    }
+
+    function chooseRealLifeParallel(state, ending) {
+      const stats = state.stats;
+      const score = ending.score || Object.values(stats).reduce((sum, value) => sum + value, 0);
+      const match = Math.max(62, Math.min(98, 58 + Math.round(score * 0.42) + Math.floor(seededRandom(state.seed + 7) * 12)));
+      const lastRoute = state.history[state.history.length - 1]?.routeLabel || '这条路线';
+
+      const catalog = {
+        '透支型人生': [
+          {
+            person: '村上春树',
+            role: '从高强度经营转向写作与跑步节律的创作者',
+            body: `你这局和村上春树公开人生叙事里的转折点高度重合：不是没有产出，而是身体开始要求你重建节律。${lastRoute}给了你结果，但也提醒你，长期主义先是体力工程。`,
+            encouragement: '下一局不必降低野心，只要把睡眠、运动和边界感放进战略层。能跑得久的人，才有资格等到复利。'
+          },
+          {
+            person: '张小龙',
+            role: 'Foxmail到微信，长期高压下持续输出的产品经理',
+            body: `你这局和张小龙的公众形象相似：技术底子厚、输出强度高，但代价是身体和精神长期紧绷。${lastRoute}给了你专业深度，但也留下了健康账单。`,
+            encouragement: '真正厉害的产品不是连续熬夜堆出来的，而是找到可持续的输出节奏。下一局试试把健康设为硬约束。'
+          },
+          {
+            person: '埃隆·马斯克',
+            role: '同时推动多家公司的极限工作者',
+            body: `你这局和马斯克的公开叙事重合：多线作战、睡工厂、极限压缩时间。${lastRoute}不是职业选择，更像一场耐力测试。`,
+            encouragement: '改变世界的前提是活到改变世界的那天。下一局保留野心的同时，给身体留一点冗余。'
+          }
+        ],
+        '高杠杆人生': [
+          {
+            person: '史蒂夫·乔布斯',
+            role: '把审美、产品和商业押注压到同一条线上的创业者',
+            body: `你这局和乔布斯的公众叙事高度重合：不满足于安全收益，而是把选择推向更高杠杆的位置。${lastRoute}不是稳定路线，更像一次次产品级押注。`,
+            encouragement: '继续保留这种锋利，但别让它变成孤注一掷。真正厉害的押注，是每次都给下一次留下筹码。'
+          },
+          {
+            person: '黄峥',
+            role: '拼多多创始人，效率与规模的极致追求者',
+            body: `你这局和黄峥的公众形象相似：找到一条高杠杆路径后All-in，用效率换规模。${lastRoute}给了你不对称回报的可能，但也压缩了容错空间。`,
+            encouragement: '杠杆是放大器，不是创造者。下一局问问自己：如果这条路的杠杆失效，你还剩下什么？'
+          },
+          {
+            person: '张一鸣',
+            role: '字节跳动创始人，算法杠杆的极致使用者',
+            body: `你这局和张一鸣的公众叙事重合：用系统化的方法把个人努力放大到极致。${lastRoute}的本质不是努力，而是找到正确的杠杆支点。`,
+            encouragement: '算法杠杆可以放大正确，也可以放大错误。下一局在加速之前，先确认方向是对的。'
+          }
+        ],
+        '自由孤岛': [
+          {
+            person: '亨利·戴维·梭罗',
+            role: '用退出主流节奏换取思想自由的写作者',
+            body: `你这局和梭罗式的公开形象高度重合：你把自由度拉高，把外部评价降到最低。代价是关系变薄，但你换到了不被安排的时间。`,
+            encouragement: '自由不是逃离所有人，而是保留选择谁同行的权利。下一局可以少一点孤岛，多一点同盟。'
+          },
+          {
+            person: '卡夫卡',
+            role: '保险公司职员与隐秘写作者的双重人生',
+            body: `你这局和卡夫卡的公众叙事相似：白天有一份不算差的工作，晚上在私人世界里建造真正属于自己的东西。${lastRoute}是你的瓦尔登湖。`,
+            encouragement: '隐秘的创作空间是珍贵的，但完全隐藏会让连接断裂。下一局试试把作品多给一个人看。'
+          },
+          {
+            person: '三岛由纪夫',
+            role: '美学与孤独走向极端的作家',
+            body: `你这局和三岛由纪夫的公众形象重合：你把自由度推到了关系网络的边缘。${lastRoute}给了你完整的自主性，但也拉薄了与世界的缓冲层。`,
+            encouragement: '极端的自由需要极端的自我支撑。下一局保留独处空间的同时，建立一两个不需要表演的关系。'
+          }
+        ],
+        '稳态人生': [
+          {
+            person: '稻盛和夫',
+            role: '强调长期经营、秩序和心性修炼的企业家',
+            body: `你这局和稻盛和夫的公众叙事相似：不追求某个指标爆表，而是让关系、健康和责任保持可持续。${lastRoute}看起来不刺激，但能稳稳滚动。`,
+            encouragement: '稳不是平庸，是把系统做厚。你已经有了复盘和耐心，下一局可以在稳态里加一点真正想要的冒险。'
+          },
+          {
+            person: '沃伦·巴菲特',
+            role: '长期主义投资者，复利信徒',
+            body: `你这局和巴菲特的公众形象重合：拒绝短期诱惑，把时间当作盟友而非敌人。${lastRoute}的回报曲线不陡峭，但足够长。`,
+            encouragement: '复利最怕的不是慢，是中断。下一局继续保持这种节奏，同时留意那些真正值得加速的时刻。'
+          },
+          {
+            person: '汪曾祺',
+            role: '在动荡年代守住生活美学的作家',
+            body: `你这局和汪曾祺的公众叙事相似：不急于证明什么，而是在日常里找到可持续的愉悦。${lastRoute}不是赛道，是生活方式。`,
+            encouragement: '能把普通日子过得有滋味的人，通常也更能扛住风浪。下一局继续守护这种能力。'
+          }
+        ],
+        '意义驱动人生': [
+          {
+            person: 'J.K.罗琳',
+            role: '在低谷里持续写作，把私人世界做成公共作品的作者',
+            body: `你这局和J.K.罗琳的公众叙事高度重合：资源未必最宽裕，但你一直在给意义感加码。你不是只在求赢，而是在把一个相信的东西做出来。`,
+            encouragement: '这种路线前期常常不好看，但它最怕的不是慢，而是中途不再相信。继续写、继续做，意义感会反过来养活你。'
+          },
+          {
+            person: '梵高',
+            role: '生前不被认可、死后改变艺术史的画家',
+            body: `你这局和梵高的公众形象相似：意义感拉满，但世俗回报严重滞后。${lastRoute}不是为了当下舒适，而是为了某个更远的确认。`,
+            encouragement: '梵高的悲剧不是选择了意义，而是没有人告诉他意义可以慢慢来。下一局给自己多一点时间。'
+          },
+          {
+            person: '袁隆平',
+            role: '一生只做一件事的杂交水稻之父',
+            body: `你这局和袁隆平的公众叙事重合：不追风口，只解决自己认定的真问题。${lastRoute}的价值不在短期掌声，而在长期影响。`,
+            encouragement: '一生一事需要的不只是耐心，还有拒绝其他诱惑的能力。下一局继续守护那个核心问题。'
+          }
+        ],
+        '平衡型人生': [
+          {
+            person: '苏东坡',
+            role: '在政治起伏中守住生活趣味的全才',
+            body: `你这局和苏东坡的公众形象高度重合：没有一项指标爆表，但钱、健康、关系、意义都在及格线以上。${lastRoute}不是最优解，但最抗波动。`,
+            encouragement: '能在起伏中保持平衡的人，通常比单点突破的人走得更远。下一局继续这种全才策略。'
+          },
+          {
+            person: '蔡澜',
+            role: '美食家、作家、电影人，多元而自足的生活家',
+            body: `你这局和蔡澜的公众叙事相似：不把所有筹码押在一个维度，而是在多个领域找到小确幸。${lastRoute}给了你弹性，而非单一优势。`,
+            encouragement: '人生的抗脆弱性往往来自多元化，而非专业化。下一局继续扩展你的快乐来源。'
+          }
+        ],
+        '暴富型人生': [
+          {
+            person: '王健林',
+            role: '从小目标到多元化商业帝国的构建者',
+            body: `你这局和王健林的公众形象相似：经济保障拉满，但意义感没有同步跟上。${lastRoute}给了你财富自由，但自由之后的目标需要重新定义。`,
+            encouragement: '赚钱是游戏的前半段，花钱和定义后半段才是更大的挑战。下一局试试让钱服务于意义。'
+          },
+          {
+            person: '某位匿名拆迁户',
+            role: '意外获得财富后重新寻找方向的人',
+            body: `你这局和一个常见叙事的重合：经济资源突然充裕，但意义账户没有同步充值。${lastRoute}给了你选择权，但选择什么仍需要回答。`,
+            encouragement: '暴富本身不是问题，问题是暴富之后没有准备好下一个问题。下一局在赚钱之前先想清楚为什么赚。'
+          }
+        ],
+        '苦行型人生': [
+          {
+            person: '特蕾莎修女',
+            role: '以服务他人为唯一意义来源的修行者',
+            body: `你这局和特蕾莎修女的公众形象相似：意义感极高，但个人物质回报极低。${lastRoute}不是你的职业，是你的召唤。`,
+            encouragement: '苦行者的风险不是苦，而是 burnout 后无处可退。下一局给自己留一点喘息的余地。'
+          },
+          {
+            person: '王阳明',
+            role: '在贬谪与战乱中修炼心学的哲学家',
+            body: `你这局和王阳明的公众叙事重合：外部环境艰苦，但内心意义感极强。${lastRoute}是你的龙场悟道。`,
+            encouragement: '心学厉害的地方是把外部逆境转成内部养分。下一局继续这种转化，但也允许自己偶尔享受。'
+          }
+        ],
+        default: [
+          {
+            person: '俞敏洪',
+            role: '多次受挫后仍持续换场、重建战线的教育创业者',
+            body: `你这局和俞敏洪的公众叙事相似：没有一条路从头顺到尾，但每次选择都在积累下一次转身的材料。${lastRoute}只是阶段结果，不是最终身份。`,
+            encouragement: '现在最重要的不是证明这局完美，而是带着账单重开。能把失败整理成资产的人，下一局通常更强。'
+          },
+          {
+            person: '罗永浩',
+            role: '屡败屡战、不断换赛道的理想主义者',
+            body: `你这局和罗永浩的公众形象重合：不是每次选择都对，但每次都在诚实面对自己的处境。${lastRoute}是你的一个版本，不是最终版。`,
+            encouragement: '理想主义者的超能力不是每次都赢，而是输了还能站起来重新定义赢。下一局继续。'
+          },
+          {
+            person: '李子柒',
+            role: '从都市回归田园，重新定义生活价值的内容创作者',
+            body: `你这局和李子柒的公众叙事相似：曾在大城市的体系里奔跑，后来找到了属于自己的节奏。${lastRoute}不是终点，是你重新定义生活的起点。`,
+            encouragement: '从一种叙事切换到另一种，需要的不是勇气，而是先承认第一种不适合你了。下一局继续寻找属于你的版本。'
+          },
+          {
+            person: '你身边某个普通人',
+            role: '没有公开叙事、但每天认真活着的匿名者',
+            body: `你这局没有和任何名人重合——它更像你身边某个普通人的人生：没有戏剧性的起伏，但每个选择都是真实的。${lastRoute}不需要被验证，只需要被经历。`,
+            encouragement: '不是所有人生都需要被写成传记。下一局继续按自己的节奏走，不需要对标任何人。'
+          }
+        ]
+      };
+
+      const pool = catalog[ending.title] || catalog.default;
+      const pick = pool[Math.floor(seededRandom(state.seed + 99) * pool.length) % pool.length];
+      return { ...pick, match };
+    }
+
+    function renderGame() {
+      if (!gameState) return;
+      ensureDuelState();
+      renderStats();
+      renderProgress();
+      renderHistory();
+      if (gameState.ended) {
+        renderEnding();
+      } else {
+        renderDecision();
+      }
+    }
+
+    function renderStats() {
+      const container = document.getElementById('stat-grid');
+      container.innerHTML = Object.entries(STAT_META).map(([key, meta]) => {
+        const value = gameState.stats[key];
+        return `
+          <div class="stat-card">
+            <div class="stat-icon">${meta.icon}</div>
+            <div class="stat-value-row">
+              <span class="stat-value" style="color:${meta.color}">${value}</span>
+              <span class="stat-label">${meta.label}</span>
+            </div>
+            <div class="stat-track">
+              <div class="stat-fill" style="width:${value * 10}%; background:${meta.color};"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderProgress() {
+      const maxSteps = getMaxSteps();
+      document.getElementById('game-step-label').textContent = gameState.ended
+        ? `${gameState.careerName} · 本局已结束`
+        : `${gameState.careerName} · ${GAME_STEPS[gameState.currentStep] || '下一站'}`;
+      document.getElementById('game-phase-label').textContent = gameState.ended
+        ? '结局判定'
+        : `第 ${gameState.currentStep + 1} 站 / ${maxSteps}`;
+      document.getElementById('progress-dots').innerHTML = Array.from({ length: maxSteps }, (_, index) => {
+        const cls = index < gameState.currentStep ? 'done' : index === gameState.currentStep && !gameState.ended ? 'current' : '';
+        return `<span class="progress-dot ${cls}"></span>`;
+      }).join('');
+    }
+
+    function renderDecision() {
+      const stepIndex = gameState.currentStep;
+      const options = getChoiceOptions();
+      const event = getStepEvent(stepIndex);
+      const last = gameState.history[gameState.history.length - 1];
+      const stage = document.getElementById('game-stage');
+      const endingCard = document.getElementById('ending-card');
+      stage.style.display = 'block';
+      endingCard.style.display = 'none';
+
+      document.getElementById('game-event-title').textContent = `${GAME_STEPS[stepIndex] || '下一站'}`;
+      const tagFlavor = getTagAwareFlavor(null, null, stepIndex);
+      document.getElementById('game-event-desc').textContent = last
+        ? `上一步：${last.title}`
+        : '选择一条路，下注这一站。';
+      const ctx = document.getElementById('game-route-context');
+      ctx.textContent = last
+        ? `倾向：${last.routeLabel}${gameState.tags?.stayed_loyal ? ' · 深耕中' : ''}`
+        : '每个按钮代表一条路线这一站的抉择。';
+      ctx.style.display = 'none';
+      renderDuelBoard(event);
+
+      let eventEl = document.getElementById('random-event-card');
+      if (!eventEl) {
+        eventEl = document.createElement('div');
+        eventEl.id = 'random-event-card';
+        document.getElementById('battle-panel').after(eventEl);
+      }
+      const isExpanded = eventEl.getAttribute('aria-expanded') === 'true';
+      eventEl.className = 'random-event-card' + (isExpanded ? ' expanded' : '');
+      eventEl.setAttribute('role', 'button');
+      eventEl.setAttribute('tabindex', '0');
+      eventEl.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      eventEl.onclick = toggleRandomEventCard;
+      eventEl.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleRandomEventCard();
+        }
+      };
+      eventEl.innerHTML = `
+        <div class="event-kicker-row">
+          <div class="event-kicker">⚡ ${event.tag} · ${event.title}</div>
+          <span class="event-toggle" aria-hidden="true">⌄</span>
+        </div>
+        <div class="event-response-row" aria-label="选择事件应对">
+          ${EVENT_RESPONSES.map(response => {
+            const copy = getEventResponseLabel(response.id, event.tag);
+            const label = copy?.label || response.label;
+            return `
+              <button
+                type="button"
+                class="event-response-btn${event.response?.id === response.id ? ' active' : ''}"
+                onclick="event.stopPropagation(); selectEventResponse('${response.id}')"
+              >${label}</button>
+            `;
+          }).join('')}
+        </div>
+        <p class="event-body">${event.body}</p>
+        <div class="event-detail-row">
+          <span class="event-detail-label">影响</span>
+          <div class="impact-row">${renderImpact(event.impact)}</div>
+        </div>
+      `;
+
+      document.getElementById('game-choices').innerHTML = options.map((option, index) => `
+        <div class="game-choice playable-card" role="button" tabindex="0" onclick="chooseGameOption(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();chooseGameOption(${index});}">
+          <div class="choice-title">${option.dilemma.title}</div>
+        </div>
+      `).join('');
+    }
+
+    function formatActionTitle(option) {
+      const rawTitle = option.dilemma?.title || option.node?.title || '选择';
+      const nodeTitle = (option.node?.title || '').replace(/[？?]/g, '');
+      let verb = '行动';
+      if (rawTitle.includes('接下')) verb = '强攻';
+      else if (rawTitle.includes('暂时')) verb = '防守';
+      else if (rawTitle.includes('反向')) verb = '反打';
+      else if (rawTitle.includes('放弃')) verb = '换招';
+      else if (rawTitle.includes('做成作品')) verb = '蓄力';
+      const target = nodeTitle.length > 8 ? nodeTitle.slice(0, 8) : nodeTitle;
+      return `${verb} · ${target || option.route.short_label}`;
+    }
+
+    function selectEventResponse(responseId) {
+      if (!gameState || gameState.ended) return;
+      const response = getEventResponseMeta(responseId);
+      gameState.eventResponses = gameState.eventResponses || {};
+      gameState.eventResponses[String(gameState.currentStep)] = response.id;
+      syncWindowState();
+      saveGame();
+      renderMain();
+      playSfx('tap', 0.55);
+    }
+
+    function triggerImpactFeedback(duelRound) {
+      const shell = document.querySelector('.game-shell');
+      if (!shell || !duelRound) return;
+      shell.classList.remove('impact-burst');
+      void shell.offsetWidth;
+      shell.classList.add('impact-burst');
+
+      const flash = document.createElement('div');
+      flash.className = 'impact-flash';
+      document.body.appendChild(flash);
+      setTimeout(() => flash.remove(), 480);
+      setTimeout(() => shell.classList.remove('impact-burst'), 540);
+    }
+
+    function renderDuelBoard(event) {
+      const duel = ensureDuelState();
+      const panel = document.getElementById('battle-panel');
+      const signal = getPressureSignal(event);
+      const last = duel.lastRound;
+      const pressurePct = duel.maxPressure ? duel.pressure / duel.maxPressure * 100 : 0;
+      const resolvePct = duel.maxResolve ? duel.resolve / duel.maxResolve * 100 : 0;
+      panel.className = `battle-panel${last ? ' clash' : ''}`;
+      panel.innerHTML = `
+        <div class="duel-board">
+          <div class="duel-side">
+            <div class="duel-meter"><div class="duel-fill" style="width:${resolvePct}%; background:#d7b46a;"></div></div>
+          </div>
+          <div class="duel-vs">vs</div>
+          <div class="duel-side">
+            <div class="duel-meter"><div class="duel-fill" style="width:${pressurePct}%; background:${signal.color};"></div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDuelLog(last) {
+      if (!last) return '局势压力已出现：先处理变数，再打出路线牌。';
+      const recoil = last.resolveLoss > 0 ? `，反噬 -${last.resolveLoss}` : '，你稳住了反噬';
+      const breakthrough = last.breakthrough ? '，破局！' : '';
+      return `你推进 -${last.strike}${recoil}${breakthrough}`;
+    }
+
+    function renderDamageFloats(last) {
+      const parts = [
+        `<span class="damage-float">-${last.strike}</span>`,
+        `<span class="damage-float shock">冲击</span>`
+      ];
+      if (last.resolveLoss > 0) {
+        parts.push(`<span class="damage-float player">-${last.resolveLoss}</span>`);
+      }
+      return parts.join('');
+    }
+
+    function toggleRandomEventCard() {
+      const eventEl = document.getElementById('random-event-card');
+      if (!eventEl) return;
+      const expanded = eventEl.getAttribute('aria-expanded') !== 'true';
+      eventEl.classList.toggle('expanded', expanded);
+      eventEl.setAttribute('aria-expanded', String(expanded));
+    }
+
+    function compactNodeSummary(node) {
+      const text = (node.description || node.title || '').replace(/\s+/g, '');
+      return text.length > 18 ? text.slice(0, 18) + '...' : text;
+    }
+
+    function renderImpact(impact) {
+      return Object.entries(impact).map(([key, value]) => {
+        const cls = value > 0 ? 'up' : value < 0 ? 'down' : '';
+        return `<span class="impact-pill ${cls}">${STAT_META[key].label} ${signed(value)}</span>`;
+      }).join('');
+    }
+
+    function renderTopImpact(impact) {
+      const entries = Object.entries(impact)
+        .filter(([, value]) => value !== 0)
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+        .slice(0, 2);
+      const visible = entries.length ? entries : Object.entries(impact).slice(0, 1);
+      return visible.map(([key, value]) => {
+        const cls = value > 0 ? 'up' : value < 0 ? 'down' : '';
+        return `<span class="impact-pill ${cls}">${STAT_META[key].label} ${signed(value)}</span>`;
+      }).join('');
+    }
+
+
+    function renderHistory() {
+      const box = document.getElementById('game-history');
+      if (!gameState.history.length) {
+        box.classList.remove('active');
+        box.innerHTML = '';
+        return;
+      }
+
+      box.classList.add('active');
+      box.innerHTML = `
+        <h3>已发生的选择</h3>
+        <div class="history-list">
+          ${gameState.history.map(item => `
+            <div class="history-item">
+              <span class="history-badge">${item.timeLabel}</span>
+              <span><strong style="color:${item.routeColor}">${item.routeLabel}</strong> · ${item.title}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderEnding() {
+      document.getElementById('game-stage').style.display = 'none';
+      const card = document.getElementById('ending-card');
+      const ending = gameState.ending || judgeEnding(gameState);
+      if (!ending.parallel) {
+        ending.parallel = chooseRealLifeParallel(gameState, ending);
+        gameState.ending = ending;
+        saveGame();
+      }
+
+      // Meta 奖励判定（每局只发一次）
+      let metaResult = null;
+      let newRelics = [];
+      if (!gameState.metaAwarded) {
+        gameState.metaAwarded = true;
+        const score = Object.values(gameState.stats).reduce((sum, v) => sum + v, 0);
+        metaResult = awardGameEnd(ending.title, score);
+        newRelics = generateRelics(gameState);
+        saveRelics(newRelics);
+        saveGame();
+      }
+
+      card.style.display = 'block';
+      card.innerHTML = `
+        <h2 id="ending-title">${ending.title}</h2>
+        <p>${ending.tone}</p>
+        ${renderEndingParallel(ending.parallel)}
+        <div class="impact-row" style="margin-top:12px;">${renderEndingStats()}</div>
+        ${newRelics.length ? renderRelics(newRelics) : ''}
+        ${metaResult ? renderMetaLevelUp(metaResult) : renderMetaBrief()}
+        <div class="ending-actions">
+          <button class="btn btn-primary" data-action="restart" onclick="restartGame(true)">重开一局</button>
+          <button class="btn btn-glow" data-action="share" onclick="shareGame()">分享本局</button>
+          <button class="btn btn-glow" data-action="card" onclick="renderLifeCard()" style="grid-column:1/-1; font-size:0.82rem;">生成人生名片</button>
+        </div>
+      `;
+    }
+
+    function renderRelics(relics) {
+      return `
+        <div class="relic-section" style="margin-top:8px; padding:8px 10px; background:rgba(215,180,106,0.05); border:1px solid rgba(215,180,106,0.12); border-radius:8px;">
+          <div class="relic-kicker" style="color:#e3b341; font-size:0.6rem; letter-spacing:0.06em; margin-bottom:5px;">纪念品</div>
+          ${relics.map(r => `
+            <div class="relic-item" style="display:flex; align-items:flex-start; gap:6px; margin-bottom:5px; padding-bottom:5px; border-bottom:1px solid rgba(90,106,122,0.1);">
+              <span style="font-size:0.55rem; color:${r.rarity === 'legendary' ? '#e3b341' : r.rarity === 'epic' ? '#d896ff' : r.rarity === 'rare' ? '#44d07b' : '#8d8574'}; flex-shrink:0; margin-top:2px;">${r.rarity === 'legendary' ? '✧' : r.rarity === 'epic' ? '◆' : r.rarity === 'rare' ? '◇' : '·'}</span>
+              <div style="flex:1; min-width:0;">
+                <div style="color:#e0ecff; font-size:0.76rem; font-weight:500;">${r.name}</div>
+                <div style="color:var(--text-dim); font-size:0.65rem; line-height:1.35; margin-top:1px;">${r.story}</div>
+                <div style="color:${r.buff.stat === 'all' ? '#e3b341' : '#44d07b'}; font-size:0.6rem; margin-top:2px;">${r.buff.flavor}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderMetaBrief() {
+      const meta = getMetaProgress();
+      const lvl = computeLevel(meta.xp);
+      const next = getNextLevel(meta.xp);
+      if (!next) return `<div class="meta-level-bar" style="margin-top:14px;"><span class="meta-level-label">人生阅历 Lv.${lvl.level} ${lvl.label}</span><span class="meta-xp-text">满级</span></div>`;
+      const pct = next ? Math.round((meta.xp - lvl.xp) / (next.xp - lvl.xp) * 100) : 100;
+      return `
+        <div class="meta-level-bar" style="margin-top:14px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span class="meta-level-label">人生阅历 Lv.${lvl.level} ${lvl.label}</span>
+            <span class="meta-xp-text">${meta.xp}/${next.xp} XP</span>
+          </div>
+          <div class="meta-xp-track"><div class="meta-xp-fill" style="width:${pct}%"></div></div>
+          <div class="meta-next-reward">下一级${next.reward ? '解锁：' + next.desc : '：' + next.label}</div>
+          <div class="meta-total-stats">累计 ${meta.totalGames} 局 · ${meta.uniqueEndings.length} 种结局 · 最高 ${meta.highestScore} 分</div>
+        </div>
+      `;
+    }
+
+    function renderMetaLevelUp(result) {
+      const { meta, gained, leveledUp, newLevel, oldLevel } = result;
+      const next = getNextLevel(meta.xp);
+      const lvlPct = next ? Math.round((meta.xp - newLevel.xp) / (next.xp - newLevel.xp) * 100) : 100;
+      return `
+        <div class="meta-level-bar" style="margin-top:14px;">
+          <div class="meta-gained" style="margin-bottom:6px;">+${gained} XP${leveledUp ? ' · 升到 Lv.' + newLevel.level + ' 「' + newLevel.label + '」' : ''}</div>
+          ${leveledUp && newLevel.reward ? `<div class="meta-unlock">✦ 解锁：${newLevel.desc}</div>` : ''}
+          <div style="display:flex;justify-content:space-between;margin-top:8px;margin-bottom:4px;">
+            <span class="meta-level-label">人生阅历 Lv.${newLevel.level} ${newLevel.label}</span>
+            <span class="meta-xp-text">${meta.xp}/${next ? next.xp : '—'} XP</span>
+          </div>
+          <div class="meta-xp-track"><div class="meta-xp-fill" style="width:${next ? lvlPct : 100}%"></div></div>
+          ${next && next.reward ? `<div class="meta-next-reward">下一级解锁：${next.desc}</div>` : ''}
+          <div class="meta-total-stats">累计 ${meta.totalGames} 局 · ${meta.uniqueEndings.length} 种结局 · 最高 ${meta.highestScore} 分</div>
+        </div>
+      `;
+    }
+
+    function renderEndingParallel(parallel) {
+      if (!parallel) return '';
+      return `
+        <section class="ending-parallel">
+          <div class="parallel-kicker">现实参照</div>
+          <div class="parallel-head">
+            <div>
+              <span class="parallel-person">${parallel.person}</span>
+              <span class="parallel-role">${parallel.role}</span>
+            </div>
+            <span class="parallel-match">${parallel.match}%</span>
+          </div>
+          <p class="parallel-body">${parallel.body}</p>
+          <p class="ending-encouragement">${parallel.encouragement}</p>
+          <p class="parallel-note">这不是命运判词，只是把你的选择投到一个公开人生样本上，帮你看清下一局该调什么。</p>
+        </section>
+      `;
+    }
+
+    function renderEndingStats() {
+      return Object.entries(gameState.stats).map(([key, value]) =>
+        `<span class="impact-pill">${STAT_META[key].label} ${value}/10</span>`
+      ).join('');
+    }
+
+    function saveGame() {
+      if (!gameState) return;
+      safeStorageSet(SAVE_KEY, JSON.stringify(gameState));
+      updateResumeButton();
+    }
+
+    function normalizeLoadedGameState() {
+      if (!gameState) return;
+      const routeById = new Map(routesData.map(route => [route.id, route]));
+      (gameState.history || []).forEach(item => {
+        const route = routeById.get(item.routeId);
+        if (route) item.routeColor = route.color;
+      });
+      gameState.eventResponses = gameState.eventResponses || {};
+      ensureDuelState();
+    }
+
+    async function restoreGameFromSave() {
+      const raw = safeStorageGet(SAVE_KEY);
+      if (!raw) return false;
+      const saved = JSON.parse(raw);
+      await loadData(saved.careerId);
+      gameState = saved;
+      gameState.seed = gameState.seed || makeSeed();
+      gameState.metaAwarded = gameState.metaAwarded || gameState.ended; // 防止重复奖励
+      selectedCareerId = saved.careerId;
+      normalizeLoadedGameState();
+      syncWindowState();
+      showScene(3);
+      renderMain();
+      return true;
+    }
+
+    function updateResumeButton() {
+      const btn = document.getElementById('btn-resume');
+      if (!btn) return;
+      btn.style.display = safeStorageGet(SAVE_KEY) ? 'inline-block' : 'none';
+    }
+
+    function restartGame(showRelicSelect) {
+      safeStorageRemove(SAVE_KEY);
+      gameState = null;
+      selectedCareerId = null;
+      window._selectedRelicIds = null;
+      syncWindowState();
+      document.querySelectorAll('.career-card').forEach(c => c.classList.remove('selected'));
+      const btn = document.getElementById('btn-generate');
+      btn.style.opacity = 0.4;
+      btn.style.pointerEvents = 'none';
+      document.getElementById('share-feedback').textContent = '';
+      updateResumeButton();
+      showScene(2);
+      selectCareer(CAREERS[0].id);
+      if (showRelicSelect) renderRelicSelect();
+    }
+
+    function renderRelicSelect() {
+      if (!hasFeature('relic_slot')) return;
+      const panel = document.getElementById('meta-panel');
+      if (!panel) return;
+      const meta = getMetaProgress();
+      const myRelics = (meta.relics || []).map(r => getRelicById(r.id)).filter(Boolean);
+      if (!myRelics.length) return;
+
+      const maxSlots = hasFeature('second_relic') ? 2 : 1;
+      panel.innerHTML = '<div class="relic-select-section" style="text-align:left; margin-top:16px;"><div style="color:#e3b341; font-size:0.7rem; letter-spacing:0.06em; margin-bottom:8px;">携带纪念品（可选' + maxSlots + '个）</div><div style="display:flex; flex-direction:column; gap:6px;" id="relic-select-list">' +
+        myRelics.map(r => '<div class="relic-select-item" data-relic="' + r.id + '" onclick="toggleRelicSelection(\'' + r.id + '\')" style="padding:8px 10px; border:1px solid rgba(90,106,122,0.25); border-radius:8px; cursor:pointer; background:rgba(17,24,32,0.5); transition:border-color 0.2s;"><div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#e0ecff; font-size:0.78rem;">' + r.name + '</span><span style="font-size:0.6rem; color:' + (r.rarity === 'legendary' ? '#e3b341' : r.rarity === 'epic' ? '#d896ff' : '#8d8574') + ';">' + (r.rarity === 'legendary' ? '传说' : r.rarity === 'epic' ? '史诗' : r.rarity === 'rare' ? '稀有' : '普通') + '</span></div><div style="color:var(--text-dim); font-size:0.68rem; margin-top:3px; line-height:1.3;">' + r.story.slice(0, 80) + (r.story.length > 80 ? '...' : '') + '</div><div style="color:#44d07b; font-size:0.66rem; margin-top:3px;">' + r.buff.flavor + '</div></div>').join('') +
+        '</div><div style="color:var(--text-dim); font-size:0.64rem; margin-top:6px; text-align:center;" id="relic-select-hint">点击选择，开局即生效（可选可不选）</div></div>';
+      document.getElementById('meta-panel').innerHTML += renderMetaPanel().replace('<div class="meta-level-bar"', '<div class="meta-level-bar" style="margin-top:12px;"');
+    }
+
+    function toggleRelicSelection(relicId) {
+      if (!hasFeature('relic_slot')) return;
+      const maxSlots = hasFeature('second_relic') ? 2 : 1;
+      let selected = window._selectedRelicIds || [];
+      if (selected.includes(relicId)) {
+        selected = selected.filter(function(id) { return id !== relicId; });
+      } else {
+        if (selected.length >= maxSlots) selected.shift();
+        selected.push(relicId);
+      }
+      window._selectedRelicIds = selected;
+
+      document.querySelectorAll('.relic-select-item').forEach(function(el) {
+        var rid = el.getAttribute('data-relic');
+        el.style.borderColor = selected.includes(rid) ? '#d7b46a' : 'rgba(90,106,122,0.25)';
+        el.style.background = selected.includes(rid) ? 'rgba(215,180,106,0.1)' : 'rgba(17,24,32,0.5)';
+      });
+
+      var hint = document.getElementById('relic-select-hint');
+      if (hint) hint.textContent = selected.length ? '已选 ' + selected.length + '/' + maxSlots + ' 个纪念品' : '点击选择，开局即生效（可选可不选）';
+    }
+
+    function encodePayload(payload) {
+      const bytes = new TextEncoder().encode(JSON.stringify(payload));
+      let binary = '';
+      bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function decodePayload(encoded) {
+      const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+      const binary = atob(padded);
+      const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+
+    function buildShareUrl() {
+      if (!gameState) return location.href.split('#')[0];
+      const payload = {
+        careerId: gameState.careerId,
+        seed: gameState.seed,
+        currentStep: gameState.currentStep,
+        activeRouteId: gameState.activeRouteId,
+        stats: gameState.stats,
+        eventResponses: gameState.eventResponses || {},
+        history: gameState.history,
+        ended: gameState.ended,
+        ending: gameState.ending
+      };
+      return `${location.href.split('#')[0]}#life=${encodePayload(payload)}`;
+    }
+
+    async function shareGame() {
+      const url = buildShareUrl();
+      location.hash = url.split('#')[1] || '';
+      const feedback = document.getElementById('share-feedback');
+      try {
+        await navigator.clipboard.writeText(url);
+        feedback.textContent = '链接已复制';
+      } catch {
+        feedback.textContent = url;
+      }
+    }
+
+    // ============================================================
+    // 人生名片 Canvas 生成
+    // ============================================================
+    function renderLifeCard() {
+      const ending = gameState.ending || judgeEnding(gameState);
+      const score = Object.values(gameState.stats).reduce((sum, v) => sum + v, 0);
+      const meta = getMetaProgress();
+      const lvl = computeLevel(meta.xp);
+      const parallel = ending.parallel || chooseRealLifeParallel(gameState, ending);
+
+      const W = 900, H = 1600;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const c = canvas.getContext('2d');
+      const keys = Object.keys(STAT_META);
+
+      // ========== 背景 ==========
+      const grad = c.createRadialGradient(W/2, H*0.35, 100, W/2, H*0.5, H*0.8);
+      grad.addColorStop(0, '#12100c');
+      grad.addColorStop(1, '#0a0a08');
+      c.fillStyle = grad;
+      c.fillRect(0, 0, W, H);
+
+      // 噪点纹理
+      for (let i = 0; i < 800; i++) {
+        const x = Math.random() * W;
+        const y = Math.random() * H;
+        c.fillStyle = `rgba(255,255,255,${Math.random() * 0.015})`;
+        c.fillRect(x, y, 1.5, 1.5);
+      }
+
+      // ========== 顶部品牌区 ==========
+      c.fillStyle = 'rgba(201,168,76,0.6)';
+      c.font = '300 16px -apple-system, "PingFang SC", sans-serif';
+      c.textAlign = 'center';
+      c.fillText('平行人生', W/2, 80);
+
+      // 顶部细金线
+      c.strokeStyle = 'rgba(201,168,76,0.3)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(W/2 - 40, 100);
+      c.lineTo(W/2 + 40, 100);
+      c.stroke();
+
+      c.fillStyle = '#5a5548';
+      c.font = '12px -apple-system, "PingFang SC", sans-serif';
+      c.fillText(`第 ${meta.totalGames} 局 · Lv.${lvl.level} ${lvl.label}`, W/2, 130);
+      c.textAlign = 'left';
+
+      // ========== 结局标题区 ==========
+      // 职业徽章
+      const badgeW = c.measureText(gameState.careerName).width + 32;
+      const badgeX = (W - badgeW) / 2;
+      c.fillStyle = 'rgba(201,168,76,0.08)';
+      c.strokeStyle = 'rgba(201,168,76,0.25)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.roundRect(badgeX, 190, badgeW, 32, 16);
+      c.fill();
+      c.stroke();
+      c.fillStyle = '#c9a84c';
+      c.font = '14px -apple-system, "PingFang SC", sans-serif';
+      c.textAlign = 'center';
+      c.fillText(gameState.careerName, W/2, 212);
+
+      // 结局标题
+      c.fillStyle = '#f0ebe3';
+      c.font = '600 48px -apple-system, "PingFang SC", sans-serif';
+      const titleLines = wrapText(c, ending.title, W - 120, 48);
+      titleLines.forEach((line, i) => {
+        c.fillText(line, W/2, 290 + i * 58);
+      });
+
+      // 总分
+      const scoreY = 290 + titleLines.length * 58 + 30;
+      c.fillStyle = '#c9a84c';
+      c.font = '300 18px -apple-system, "PingFang SC", sans-serif';
+      c.fillText('人生总分', W/2, scoreY);
+      c.fillStyle = '#f0ebe3';
+      c.font = '600 72px -apple-system, "PingFang SC", sans-serif';
+      c.fillText(String(score), W/2, scoreY + 72);
+      c.fillStyle = '#5a5548';
+      c.font = '20px -apple-system, "PingFang SC", sans-serif';
+      c.fillText('/ 50', W/2 + c.measureText(String(score)).width/2 + 18, scoreY + 58);
+
+      // 装饰短线
+      const lineY = scoreY + 100;
+      c.strokeStyle = 'rgba(201,168,76,0.2)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(W/2 - 60, lineY);
+      c.lineTo(W/2 + 60, lineY);
+      c.stroke();
+
+      // ========== 五维雷达区 ==========
+      const radarY = lineY + 60;
+      c.fillStyle = '#5a5548';
+      c.font = '12px -apple-system, "PingFang SC", sans-serif';
+      c.textAlign = 'center';
+      c.fillText('人 生 五 维', W/2, radarY);
+
+      // 绘制雷达图
+      const cx = W/2, cy = radarY + 280, R = 200;
+      const angleStep = (Math.PI * 2) / 5;
+      const startA = -Math.PI / 2;
+
+      // 网格层
+      for (let layer = 1; layer <= 5; layer++) {
+        const r = R * layer / 5;
+        c.beginPath();
+        for (let i = 0; i <= 5; i++) {
+          const a = startA + i * angleStep;
+          const x = cx + Math.cos(a) * r;
+          const y = cy + Math.sin(a) * r;
+          if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+        }
+        c.closePath();
+        c.strokeStyle = layer === 5 ? 'rgba(201,168,76,0.12)' : 'rgba(255,255,255,0.025)';
+        c.lineWidth = layer === 5 ? 1.5 : 0.5;
+        c.stroke();
+      }
+
+      // 轴线
+      for (let i = 0; i < 5; i++) {
+        const a = startA + i * angleStep;
+        c.beginPath();
+        c.moveTo(cx, cy);
+        c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+        c.strokeStyle = 'rgba(255,255,255,0.03)';
+        c.lineWidth = 0.5;
+        c.stroke();
+      }
+
+      // 数据多边形
+      c.beginPath();
+      for (let i = 0; i <= 5; i++) {
+        const idx = i % 5;
+        const a = startA + idx * angleStep;
+        const v = gameState.stats[keys[idx]] / 10;
+        const r = R * v;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.closePath();
+      c.fillStyle = 'rgba(201,168,76,0.1)';
+      c.fill();
+      c.strokeStyle = 'rgba(201,168,76,0.35)';
+      c.lineWidth = 2;
+      c.stroke();
+
+      // 顶点发光圆点
+      for (let i = 0; i < 5; i++) {
+        const a = startA + i * angleStep;
+        const v = gameState.stats[keys[i]] / 10;
+        const r = R * v;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        // 发光
+        c.beginPath();
+        c.arc(x, y, 10, 0, Math.PI * 2);
+        c.fillStyle = 'rgba(201,168,76,0.15)';
+        c.fill();
+        // 实心
+        c.beginPath();
+        c.arc(x, y, 5, 0, Math.PI * 2);
+        c.fillStyle = STAT_META[keys[i]].color;
+        c.fill();
+        c.strokeStyle = '#0a0a08';
+        c.lineWidth = 2;
+        c.stroke();
+      }
+
+      // 维度标签 + 数值
+      for (let i = 0; i < 5; i++) {
+        const a = startA + i * angleStep;
+        const lx = cx + Math.cos(a) * (R + 42);
+        const ly = cy + Math.sin(a) * (R + 42);
+        const m = STAT_META[keys[i]];
+        const val = gameState.stats[keys[i]];
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = '#7a7569';
+        c.font = '12px -apple-system, "PingFang SC", sans-serif';
+        c.fillText(m.label, lx, ly - 8);
+        c.fillStyle = m.color;
+        c.font = '600 14px -apple-system, "PingFang SC", sans-serif';
+        c.fillText(String(val), lx, ly + 8);
+      }
+      c.textBaseline = 'alphabetic';
+
+      // ========== 现实参照区 ==========
+      const refY = cy + R + 90;
+      if (parallel) {
+        // 玻璃态卡片背景
+        c.fillStyle = 'rgba(255,255,255,0.025)';
+        c.strokeStyle = 'rgba(255,255,255,0.06)';
+        c.lineWidth = 1;
+        c.beginPath();
+        c.roundRect(60, refY, W - 120, 300, 16);
+        c.fill();
+        c.stroke();
+
+        // 标签
+        c.fillStyle = 'rgba(201,168,76,0.6)';
+        c.font = '11px -apple-system, "PingFang SC", sans-serif';
+        c.textAlign = 'left';
+        c.fillText('现实参照', 90, refY + 36);
+
+        // 名人姓名
+        c.fillStyle = '#f0ebe3';
+        c.font = '600 26px -apple-system, "PingFang SC", sans-serif';
+        c.fillText(parallel.person, 90, refY + 76);
+
+        // 角色
+        c.fillStyle = '#5a5548';
+        c.font = '13px -apple-system, "PingFang SC", sans-serif';
+        c.fillText(parallel.role, 90, refY + 100);
+
+        // 重合度徽章
+        const matchText = `重合度 ${parallel.match}%`;
+        const matchW = c.measureText(matchText).width + 24;
+        c.fillStyle = 'rgba(201,168,76,0.1)';
+        c.strokeStyle = 'rgba(201,168,76,0.2)';
+        c.beginPath();
+        c.roundRect(90, refY + 120, matchW, 28, 14);
+        c.fill();
+        c.stroke();
+        c.fillStyle = '#c9a84c';
+        c.font = '12px -apple-system, "PingFang SC", sans-serif';
+        c.textAlign = 'center';
+        c.fillText(matchText, 90 + matchW/2, refY + 139);
+
+        // 描述文字
+        c.fillStyle = '#9a9588';
+        c.font = '14px -apple-system, "PingFang SC", sans-serif';
+        c.textAlign = 'left';
+        const bodyLines = wrapText(c, parallel.body, W - 200, 14);
+        bodyLines.forEach((line, i) => {
+          c.fillText(line, 90, refY + 186 + i * 24);
+        });
+      }
+
+      // ========== 底部区 ==========
+      const footY = H - 100;
+      // 顶部金线
+      c.strokeStyle = 'rgba(201,168,76,0.15)';
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(80, footY);
+      c.lineTo(W - 80, footY);
+      c.stroke();
+
+      c.fillStyle = '#3a3530';
+      c.font = '11px -apple-system, "PingFang SC", sans-serif';
+      c.textAlign = 'center';
+      c.fillText('平行人生 · PARALLEL LIFE', W/2, footY + 30);
+      c.fillText(`生成于 ${new Date().toLocaleDateString('zh-CN')}`, W/2, footY + 52);
+
+      // 底部角落装饰
+      c.strokeStyle = 'rgba(201,168,76,0.15)';
+      c.lineWidth = 1;
+      // 左上
+      c.beginPath(); c.moveTo(40, H - 40); c.lineTo(40, H - 60); c.lineTo(60, H - 60); c.stroke();
+      // 右上
+      c.beginPath(); c.moveTo(W - 40, H - 40); c.lineTo(W - 40, H - 60); c.lineTo(W - 60, H - 60); c.stroke();
+      // 左下
+      c.beginPath(); c.moveTo(40, 40); c.lineTo(40, 60); c.lineTo(60, 60); c.stroke();
+      // 右下
+      c.beginPath(); c.moveTo(W - 40, 40); c.lineTo(W - 40, 60); c.lineTo(W - 60, 60); c.stroke();
+
+      c.textAlign = 'left';
+      showCardOverlay(canvas);
+    }
+
+    function wrapText(c, text, maxWidth, fontSize) {
+      const words = text.split('');
+      const lines = [];
+      let current = '';
+      for (let i = 0; i < words.length; i++) {
+        const test = current + words[i];
+        const metrics = c.measureText(test);
+        if (metrics.width > maxWidth && current.length > 0) {
+          lines.push(current);
+          current = words[i];
+        } else {
+          current = test;
+        }
+      }
+      if (current) lines.push(current);
+      return lines.slice(0, 5);
+    }
+
+    function showCardOverlay(canvas) {
+      let overlay = document.getElementById('card-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'card-overlay';
+        overlay.className = 'card-overlay';
+        overlay.onclick = function(e) { if (e.target === overlay) overlay.classList.remove('active'); };
+        document.body.appendChild(overlay);
+      }
+
+      const existing = overlay.querySelector('.card-container');
+      if (existing) existing.remove();
+
+      const container = document.createElement('div');
+      container.className = 'card-container';
+      container.innerHTML = `
+        <button class="card-close" onclick="(function(){document.getElementById('card-overlay').classList.remove('active');})()">&times;</button>
+        <img src="${canvas.toDataURL('image/png')}" alt="人生名片" style="width:100%; border-radius:12px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);" />
+        <div style="display:flex; gap:10px; margin-top:14px; justify-content:center;">
+          <button class="btn btn-primary" style="font-size:0.88rem;" onclick="downloadLifeCard(this.previousElementSibling.previousElementSibling)">保存图片</button>
+          <button class="btn btn-glow" style="font-size:0.88rem;" onclick="copyLifeCardImage(this.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling)">复制图片</button>
+        </div>
+      `;
+      overlay.appendChild(container);
+      overlay.classList.add('active');
+    }
+
+    function downloadLifeCard(img) {
+      const a = document.createElement('a');
+      a.href = img.src;
+      a.download = '平行人生_' + (gameState?.careerName || '未知') + '_' + new Date().toISOString().slice(0,10) + '.png';
+      a.click();
+    }
+
+    async function copyLifeCardImage(img) {
+      try {
+        const blob = await (await fetch(img.src)).blob();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        const fb = document.getElementById('share-feedback');
+        if (fb) fb.textContent = '图片已复制到剪贴板';
+        setTimeout(() => { if (fb) fb.textContent = ''; }, 2000);
+      } catch (e) {
+        const fb = document.getElementById('share-feedback');
+        if (fb) fb.textContent = '复制失败，请用保存按钮';
+      }
+    }
+
+    async function restoreGameFromHash() {
+      if (!location.hash.startsWith('#life=')) return false;
+      try {
+        const payload = decodePayload(location.hash.slice(6));
+        await loadData(payload.careerId);
+        const career = CAREERS.find(c => c.id === payload.careerId) || CAREERS[0];
+        gameState = {
+          careerId: payload.careerId,
+          careerName: career.name,
+          seed: payload.seed || makeSeed(),
+          currentStep: payload.currentStep || 0,
+          activeRouteId: payload.activeRouteId || null,
+          stats: payload.stats || { ...BASE_STATS },
+          eventResponses: payload.eventResponses || {},
+          history: payload.history || [],
+          ended: !!payload.ended,
+          ending: payload.ending || null,
+          metaAwarded: !!payload.ended,
+          startedAt: new Date().toISOString()
+        };
+        selectedCareerId = payload.careerId;
+        normalizeLoadedGameState();
+        syncWindowState();
+        showScene(3);
+        renderMain();
+        return true;
+      } catch (e) {
+        console.warn('分享链接恢复失败', e);
+        return false;
+      }
+    }
+
+    window.chooseGameOption = chooseGameOption;
+    window.selectEventResponse = selectEventResponse;
+    window.toggleAudio = toggleAudio;
+    window.playSfx = playSfx;
+    window.buildShareUrl = buildShareUrl;
+    window.restoreGameFromSave = restoreGameFromSave;
+    window.restartGame = restartGame;
+    window.renderLifeCard = renderLifeCard;
+    window.downloadLifeCard = downloadLifeCard;
+    window.copyLifeCardImage = copyLifeCardImage;
+    window.toggleRelicSelection = toggleRelicSelection;
+
+    // ============================================================
+    // 路线地图
+    // ============================================================
+    function renderMain() {
+      renderGame();
+      if (!window.d3) return;
+      d3.select('#tree-wrap').selectAll('*').remove();
+      d3.select('#radar-chart').selectAll('*').remove();
+      renderLegend();
+      renderTree();
+      renderRadar();
+    }
+
+    function renderLegend() {
+      const container = document.getElementById('main-legend');
+      container.innerHTML = routesData.map(r => `
+        <div class="leg-item">
+          <div class="leg-dot" style="background:${r.color}"></div>
+          <span>${r.short_label}${r.is_real ? '★' : ''}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderTree() {
+      const wrap = document.getElementById('tree-wrap');
+      const w = wrap.clientWidth;
+      const h = 460;
+      const margin = { t: 40, r: 100, b: 30, l: 80 };
+
+      const svg = d3.select('#tree-wrap').append('svg')
+        .attr('viewBox', `0 0 ${w} ${h}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+      const g = svg.append('g');
+      const sx = margin.l;
+      const sy = h / 2;
+      const rsp = (h - margin.t - margin.b) / (routesData.length + 1);
+      const nsp = (w - margin.l - margin.r - 60) / 4;
+
+      // 计算带抖动的节点位置（基于 seed 保持一致性）
+      const seedBase = gameState?.seed || 1;
+      const nodePositions = [];
+      const routeBaseY = [];
+      routesData.forEach((route, ri) => {
+        nodePositions[ri] = [];
+        const baseY = margin.t + (ri + 1) * rsp;
+        routeBaseY[ri] = baseY;
+        route.nodes.forEach((node, ni) => {
+          const jitterX = (seededRandom(seedBase + ri * 131 + ni * 37) - 0.5) * 28;
+          const jitterY = (seededRandom(seedBase + ri * 173 + ni * 61) - 0.5) * 36;
+          nodePositions[ri][ni] = {
+            x: sx + (ni + 1) * nsp + jitterX,
+            y: baseY + jitterY
+          };
+        });
+      });
+
+      // 画"可能性网" — 同 step 不同 route 之间的连接线
+      const maxNodes = Math.max(...routesData.map(r => r.nodes.length));
+      for (let ni = 0; ni < maxNodes; ni++) {
+        for (let ri = 0; ri < routesData.length; ri++) {
+          for (let rj = ri + 1; rj < routesData.length; rj++) {
+            if (!nodePositions[ri][ni] || !nodePositions[rj][ni]) continue;
+            const p1 = nodePositions[ri][ni];
+            const p2 = nodePositions[rj][ni];
+            g.append('line')
+              .attr('x1', p1.x).attr('y1', p1.y)
+              .attr('x2', p2.x).attr('y2', p2.y)
+              .attr('stroke', 'var(--border)')
+              .attr('stroke-width', 0.6)
+              .attr('stroke-dasharray', '2 5')
+              .attr('opacity', 0.22);
+          }
+        }
+      }
+
+      // 画"改道可能性" — 相邻 step 不同 route 之间的斜线
+      for (let ni = 0; ni < maxNodes - 1; ni++) {
+        for (let ri = 0; ri < routesData.length; ri++) {
+          for (let rj = 0; rj < routesData.length; rj++) {
+            if (ri === rj) continue;
+            if (!nodePositions[ri][ni] || !nodePositions[rj][ni + 1]) continue;
+            if (seededRandom(seedBase + ri * 7 + rj * 11 + ni * 13) > 0.5) continue;
+            const p1 = nodePositions[ri][ni];
+            const p2 = nodePositions[rj][ni + 1];
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2 + (rj > ri ? 22 : -22);
+            g.append('path')
+              .attr('d', d3.line().curve(d3.curveBasis)([[p1.x, p1.y], [midX, midY], [p2.x, p2.y]]))
+              .attr('stroke', 'var(--border)')
+              .attr('stroke-width', 0.5)
+              .attr('fill', 'none')
+              .attr('stroke-dasharray', '2 6')
+              .attr('opacity', 0.15);
+          }
+        }
+      }
+
+      // 画用户实际走过的路径（跨路线时显示斜线）
+      if (gameState?.history?.length) {
+        let prevPos = { x: sx, y: sy };
+        gameState.history.forEach((item, hi) => {
+          const routeIdx = routesData.findIndex(r => r.id === item.routeId);
+          if (routeIdx >= 0 && nodePositions[routeIdx]?.[hi]) {
+            const pos = nodePositions[routeIdx][hi];
+            const midX = (prevPos.x + pos.x) / 2;
+            const midY = (prevPos.y + pos.y) / 2 + (routeIdx % 2 === 0 ? 12 : -12);
+            g.append('path')
+              .attr('d', d3.line().curve(d3.curveBasis)([[prevPos.x, prevPos.y], [midX, midY], [pos.x, pos.y]]))
+              .attr('stroke', item.routeColor || '#d7b46a')
+              .attr('stroke-width', 2.5)
+              .attr('fill', 'none')
+              .attr('opacity', 0.85);
+            prevPos = pos;
+          }
+        });
+      }
+
+      // 不可逆点（基于抖动后的位置）
+      routesData.forEach((route, ri) => {
+        route.irreversible_points.forEach(ip => {
+          const mi = Math.floor(ip.at_month / 3);
+          const clampedMi = Math.min(mi, route.nodes.length - 1);
+          const pos = nodePositions[ri]?.[clampedMi];
+          if (!pos) return;
+          g.append('circle').attr('class', 'ir-marker')
+            .attr('cx', pos.x).attr('cy', pos.y - 38).attr('r', 4)
+            .attr('fill', '#e3b341').attr('stroke', '#0e0e0b').attr('stroke-width', 2);
+          g.append('text').attr('class', 'ir-text')
+            .attr('x', pos.x).attr('y', pos.y - 50).attr('text-anchor', 'middle')
+            .text('⚠ ' + ip.label);
+        });
+      });
+
+      // 路线（基于抖动位置）
+      routesData.forEach((route, ri) => {
+        const isActiveRoute = gameState?.activeRouteId === route.id;
+        const pts = [[sx, sy]];
+        route.nodes.forEach((_, ni) => {
+          if (nodePositions[ri][ni]) pts.push([nodePositions[ri][ni].x, nodePositions[ri][ni].y]);
+        });
+
+        g.append('path')
+          .attr('class', `route-path ${route.is_real || isActiveRoute ? 'real' : 'dashed'}`)
+          .attr('d', d3.line().curve(d3.curveBasis)(pts))
+          .attr('stroke', route.color);
+
+        // 路线标签
+        const lastPos = nodePositions[ri][route.nodes.length - 1];
+        const lx = lastPos ? lastPos.x + 44 : sx + 4.2 * nsp;
+        const ly = lastPos ? lastPos.y : routeBaseY[ri];
+        g.append('rect').attr('fill', 'var(--bg-card)').attr('stroke', 'var(--border)')
+          .attr('x', lx - 4).attr('y', ly - 14).attr('width', 90).attr('height', 22).attr('rx', 4);
+        g.append('text').attr('x', lx).attr('y', ly - 2)
+          .attr('fill', route.color).attr('font-size', '10px').attr('font-weight', '500')
+          .text(route.short_label + (isActiveRoute ? ' ●' : route.is_real ? ' ★' : ''));
+      });
+
+      // 起点
+      g.append('circle').attr('class', 'start-circle')
+        .attr('cx', sx).attr('cy', sy).attr('r', 10);
+      g.append('text').attr('class', 'start-text')
+        .attr('x', sx - 16).attr('y', sy + 4).text('现在的你');
+
+      // 节点
+      routesData.forEach((route, ri) => {
+        route.nodes.forEach((node, ni) => {
+          const pos = nodePositions[ri][ni];
+          if (!pos) return;
+          const x = pos.x;
+          const y = pos.y;
+          const isOpen = node.income === null;
+          const icon = getIcon(node.title);
+
+          const chosen = gameState?.history?.some(item => item.routeId === route.id && item.step === ni);
+          const grp = g.append('g').attr('class', `node-card-group${chosen ? ' chosen' : ''}`)
+            .on('click', () => showDetail(route, node));
+
+          // 卡片背景
+          grp.append('rect').attr('class', 'node-rect')
+            .attr('x', x - 32).attr('y', y - 32)
+            .attr('width', 64).attr('height', 56).attr('rx', 10);
+
+          // 时间 pill
+          grp.append('rect').attr('class', 'node-pill')
+            .attr('x', x - 16).attr('y', y - 26)
+            .attr('width', 32).attr('height', 14).attr('rx', 4)
+            .attr('fill', 'var(--bg)');
+          grp.append('text').attr('class', 'node-pill-text')
+            .attr('x', x).attr('y', y - 16).text(node.time_label);
+
+          // 图标或圆圈
+          if (isOpen) {
+            grp.append('circle').attr('cx', x).attr('cy', y - 2).attr('r', 10)
+              .attr('fill', 'none').attr('stroke', route.color).attr('stroke-width', 2);
+            grp.append('text').attr('class', 'node-icon-text')
+              .attr('x', x).attr('y', y - 1).text('?').attr('fill', route.color).attr('font-size', '14px');
+          } else {
+            grp.append('text').attr('class', 'node-icon-text')
+              .attr('x', x).attr('y', y - 1).text(icon);
+          }
+
+          // 标题
+          const shortTitle = node.title.length > 5 ? node.title.substring(0, 4) + '..' : node.title;
+          grp.append('text').attr('class', 'node-title')
+            .attr('x', x).attr('y', y + 18).text(shortTitle);
+
+          // tooltip
+          if (!isOpen) {
+            grp.on('mouseenter', function(e) {
+              const tip = document.getElementById('tip');
+              tip.innerHTML = `<strong>${node.title}</strong>`;
+              tip.style.left = (e.pageX + 10) + 'px';
+              tip.style.top = (e.pageY - 30) + 'px';
+              tip.style.opacity = 1;
+            }).on('mouseleave', () => document.getElementById('tip').style.opacity = 0);
+          }
+        });
+
+        // 终点标记
+        const lastNode = route.nodes[route.nodes.length - 1];
+        const lastPos = nodePositions[ri][route.nodes.length - 1];
+        const lx = lastPos ? lastPos.x + 40 : sx + 4 * nsp + 38;
+        const ly = lastPos ? lastPos.y : routeBaseY[ri];
+        const markerG = g.append('g')
+          .attr('class', 'ending-marker')
+          .attr('transform', `translate(${lx}, ${ly + 12})`);
+        markerG.append('circle')
+          .attr('cx', 0).attr('cy', 0).attr('r', 11)
+          .attr('fill', 'var(--bg)').attr('stroke', route.color).attr('stroke-width', 2);
+        markerG.append('text')
+          .attr('x', 0).attr('y', 1)
+          .attr('text-anchor', 'middle')
+          .attr('dominant-baseline', 'central')
+          .attr('font-size', '13px')
+          .attr('fill', route.color)
+          .text(lastNode.title.includes('？') ? '?' : '◆');
+      });
+    }
+
+    function showDetail(route, node) {
+      const overlay = document.getElementById('detail-overlay');
+      const popup = document.getElementById('detail-popup');
+      const body = document.getElementById('detail-body');
+      const isOpen = node.income === null;
+
+      let metricsHtml = '';
+      if (!isOpen) {
+        const incomeColor = node.income >= 0 ? '#3fb950' : '#f85149';
+        const emotionColor = node.emotion >= 6 ? '#3fb950' : node.emotion >= 4 ? '#d29922' : '#f85149';
+        const healthColor = node.health >= 6 ? '#3fb950' : node.health >= 4 ? '#d29922' : '#f85149';
+        metricsHtml = `
+          <div class="detail-metrics">
+            <div class="metric">
+              <div class="metric-label">月收入</div>
+              <div class="metric-track"><div class="metric-fill" style="width:${Math.min(Math.abs(node.income)/1000, 100)}%; background:${incomeColor}"></div></div>
+              <div class="metric-val" style="color:${incomeColor}">${node.income >= 0 ? '¥' + node.income.toLocaleString() : '-¥' + Math.abs(node.income).toLocaleString()}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">情绪</div>
+              <div class="metric-track"><div class="metric-fill" style="width:${node.emotion * 10}%; background:${emotionColor}"></div></div>
+              <div class="metric-val" style="color:${emotionColor}">${node.emotion}/10</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">健康</div>
+              <div class="metric-track"><div class="metric-fill" style="width:${node.health * 10}%; background:${healthColor}"></div></div>
+              <div class="metric-val" style="color:${healthColor}">${node.health}/10</div>
+            </div>
+          </div>
+        `;
+      }
+
+      body.innerHTML = `
+        <div class="detail-tag" style="background:${route.color}18; color:${route.color}; border:1px solid ${route.color}40;">
+          ${route.short_label}${route.is_real ? ' · 真实' : ''}
+        </div>
+        <h3>${node.title}</h3>
+        <div class="detail-time">${node.time_label} 后 · ${route.label}</div>
+        <div class="detail-desc">${node.description}</div>
+        ${isOpen ? '<div class="detail-open">未来尚未书写<br>选择权在你手里</div>' : metricsHtml}
+        <div class="detail-event" style="border-left:3px solid ${route.color}; padding-left:12px; border-radius:0 8px 8px 0;">
+          <div class="detail-event-label">关键事件</div>
+          <div class="detail-event-text">${node.key_event}</div>
+        </div>
+      `;
+
+      overlay.classList.add('active');
+      popup.classList.add('active');
+    }
+
+    function closeDetail() {
+      document.getElementById('detail-overlay').classList.remove('active');
+      document.getElementById('detail-popup').classList.remove('active');
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+    function renderRadar() {
+      const container = document.getElementById('radar-chart');
+      const w = 380, h = 320;
+      const r = Math.min(w, h) / 2 - 40;
+
+      const svg = d3.select('#radar-chart').append('svg')
+        .attr('width', w).attr('height', h);
+      const g = svg.append('g').attr('transform', `translate(${w/2}, ${h/2 + 5})`);
+
+      const dims = Object.keys(dimensionLabels);
+      const slice = (Math.PI * 2) / dims.length;
+
+      // 网格
+      for (let i = 1; i <= 5; i++) {
+        g.append('circle').attr('r', r * i / 5)
+          .attr('fill', 'none').attr('stroke', 'var(--border)').attr('stroke-width', 1);
+      }
+
+      // 轴线
+      dims.forEach((dim, i) => {
+        const a = slice * i - Math.PI / 2;
+        g.append('line')
+          .attr('x1', 0).attr('y1', 0)
+          .attr('x2', Math.cos(a) * r).attr('y2', Math.sin(a) * r)
+          .attr('stroke', 'var(--border)');
+        g.append('text')
+          .attr('x', Math.cos(a) * (r + 18)).attr('y', Math.sin(a) * (r + 18))
+          .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
+          .attr('fill', 'var(--text-dim)').attr('font-size', '11px')
+          .text(dimensionLabels[dim]);
+      });
+
+      // 路线
+      routesData.forEach(route => {
+        const vals = dims.map(dim => route.balance_sheet[dim]);
+        const pts = vals.map((v, i) => {
+          const a = slice * i - Math.PI / 2;
+          return [Math.cos(a) * r * v / 10, Math.sin(a) * r * v / 10];
+        });
+
+        g.append('path')
+          .attr('d', d3.line().curve(d3.curveLinearClosed).x(d => d[0]).y(d => d[1])(pts))
+          .attr('fill', route.color).attr('fill-opacity', route.is_real ? 0.12 : 0.04)
+          .attr('stroke', route.color).attr('stroke-width', route.is_real ? 2 : 1)
+          .attr('stroke-opacity', route.is_real ? 1 : 0.4)
+          .attr('stroke-dasharray', route.is_real ? '' : '3 3');
+
+        pts.forEach(p => {
+          g.append('circle').attr('cx', p[0]).attr('cy', p[1])
+            .attr('r', route.is_real ? 3 : 2).attr('fill', route.color)
+            .attr('stroke', 'var(--bg)').attr('stroke-width', 1);
+        });
+      });
+
+      // 图例
+      const leg = svg.append('g').attr('transform', `translate(${w - 90}, 15)`);
+      routesData.forEach((route, i) => {
+        leg.append('line').attr('x1', 0).attr('y1', i * 16).attr('x2', 12).attr('y2', i * 16)
+          .attr('stroke', route.color).attr('stroke-width', route.is_real ? 2 : 1)
+          .attr('stroke-dasharray', route.is_real ? '' : '2 2');
+        leg.append('text').attr('x', 16).attr('y', i * 16 + 4)
+          .attr('fill', route.color).attr('font-size', '9px')
+          .text(route.short_label + (route.is_real ? '★' : ''));
+      });
+    }
+
+    // ============================================================
+    // 初始化
+    // ============================================================
+    function init() {
+      resizeCanvas();
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        if (currentScene === 3) renderMain();
+      });
+      drawBg();
+      updateSoundButton();
+
+      // 开场文案（直接显示，无动画）
+      const tw = document.getElementById('typewriter');
+      tw.innerHTML = '凌晨一点，第79个案子终于处理完了。<br>窗外城市的灯火像无数条平行线，每条线都是一个选择。<br>如果当初，选了另一条路呢？';
+      document.getElementById('intro-btn-wrap').style.opacity = 1;
+      document.getElementById('cursor').style.display = 'none';
+
+      // 试玩关卡
+      initCareerSelect();
+      syncWindowState();
+      restoreGameFromHash();
+    }
+
+    init();
+  </script>
+</body>
+</html>

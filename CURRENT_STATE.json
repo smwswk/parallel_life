@@ -1,0 +1,40 @@
+{
+  "project": "parallel_life",
+  "version": "4.0-dev",
+  "status": "implementing",
+  "last_updated": "2026-05-21",
+  "owner": "claude",
+  "files": {
+    "index.html": { "status": "current", "note": "V4.0-dev：圣遗物+分支标记系统代码已写入，4768行。需浏览器验证" }
+  },
+  "v3_8_completed": [
+    "人生阅历等级系统（1-20级XP）",
+    "开局五维加成（Lv.8起+1）",
+    "结局页Meta进度展示",
+    "职业选择页Meta面板",
+    "Canvas人生名片生成/保存/复制"
+  ],
+  "v4_0_implemented": [
+    "圣遗物目录（12件：common×4, rare×3, epic×3, legendary×2）",
+    "遗物生成逻辑（基于路线/属性/标记条件触发生成1-3件）",
+    "遗物存储到Meta进度",
+    "圣遗物选择UI（职业选择页，支持1-2携带位）",
+    "遗物buff应用（开局属性加成+特殊效果如行动力上限提升）",
+    "分支标记系统（8种标记：took_risk/burned_bridge/stayed_loyal等）",
+    "标记自动设置（基于选择路线、收入跳变、连续同路线等条件）",
+    "标记感知文本（结局页/游戏描述文字随标记变化）",
+    "createInitialDuel支持resolveBoost参数",
+    "站点扩展4→6（新增2个插值过渡节点：6个月后、2年后）",
+    "节点插值函数expandRouteNodes（运行时从4原始节点扩展为6节点）",
+    "UI简化：统计面板→图标+数值+迷你进度条",
+    "UI简化：对战面板→单行对比进度条",
+    "UI简化：随机事件默认折叠，点击展开",
+    "UI简化：选项卡去掉详情折叠，直接显示标题+combat数字",
+    "整体留白增加（game-shell gap 12→16px, stage padding 16→20px）"
+  ],
+  "blockers": [],
+  "next_steps": [
+    "浏览器手工验证完整流程：开局→选职业→6站→结局→重开",
+    "V4.1：路线扩展6→8（副业路线+黑天鹅路线）+ Combo系统"
+  ]
+}
