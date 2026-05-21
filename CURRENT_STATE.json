@@ -1,7 +1,7 @@
 {
   "project": "parallel_life",
-  "version": "4.0-dev",
-  "status": "implementing",
+  "version": "4.0",
+  "status": "shipped",
   "last_updated": "2026-05-21",
   "owner": "claude",
   "files": {
